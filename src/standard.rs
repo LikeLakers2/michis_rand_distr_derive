@@ -1,9 +1,12 @@
 use proc_macro2::TokenStream;
 use quote::format_ident;
-use syn::{parse_quote, Data, DeriveInput, GenericParam, Generics, ImplItemFn, WherePredicate};
+use syn::{
+	parse_quote, Data, DeriveInput, Expr, ExprStruct, FieldValue, GenericParam, Generics, Type,
+	WherePredicate,
+};
 
 pub fn derive(input: DeriveInput) -> TokenStream {
-	let sample_method = self::generate_sample_method(&input);
+	let sample_method_code = self::generate_sample_method(&input);
 
 	let struct_name = input.ident;
 	let trait_bounds_added = self::add_trait_bounds(input.generics);
@@ -11,7 +14,9 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 
 	parse_quote! {
 		impl #impl_generics ::rand::distributions::Distribution<#struct_name #ty_generics> for ::rand::distributions::Standard #where_clause {
-			#sample_method
+			fn sample<R: ::rand::Rng + ?Sized>(&self, rng: &mut R) -> #struct_name #ty_generics {
+				#sample_method_code
+			}
 		}
 	}
 }
@@ -40,27 +45,33 @@ fn add_trait_bounds(mut generics: Generics) -> Generics {
 	generics
 }
 
-fn generate_sample_method(input: &DeriveInput) -> ImplItemFn {
-	let ident = input.ident.clone();
+fn generate_sample_method(input: &DeriveInput) -> ExprStruct {
+	let struct_ident = input.ident.clone();
 	match &input.data {
 		Data::Struct(data_struct) => {
-			let field_names = data_struct
-				.fields
-				.iter()
-				.enumerate()
-				.map(|(num, field)| {
-					field
-						.ident
-						.clone()
-						.map_or(num.to_string(), |name| name.to_string())
-				})
-				.map(|name| format_ident!("{}", name));
+			let field_gen =
+				data_struct
+					.fields
+					.iter()
+					.enumerate()
+					.map::<FieldValue, _>(|(num, field)| {
+						let ident = format_ident!(
+							"{}",
+							field
+								.ident
+								.clone()
+								.map_or(num.to_string(), |name| name.to_string())
+						);
+						let ty = &field.ty;
+
+						parse_quote! {
+							#ident: rng.gen::<#ty>()
+						}
+					});
 
 			parse_quote! {
-				fn sample<R: ::rand::Rng + ?Sized>(&self, rng: &mut R) -> #ident {
-					#ident {
-						#(#field_names: rng.gen()),*
-					}
+				#struct_ident {
+					#(#field_gen),*
 				}
 			}
 		}
