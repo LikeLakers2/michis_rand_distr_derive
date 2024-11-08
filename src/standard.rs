@@ -1,7 +1,6 @@
 use proc_macro2::TokenStream;
-use quote::format_ident;
 use syn::{
-	parse_quote, Data, DeriveInput, Expr, ExprStruct, FieldValue, GenericParam, Generics, Type,
+	parse_quote, Data, DeriveInput, ExprStruct, FieldValue, GenericParam, Generics, Member,
 	WherePredicate,
 };
 
@@ -55,17 +54,12 @@ fn generate_sample_method(input: &DeriveInput) -> ExprStruct {
 					.iter()
 					.enumerate()
 					.map::<FieldValue, _>(|(num, field)| {
-						let ident = format_ident!(
-							"{}",
-							field
-								.ident
-								.clone()
-								.map_or(num.to_string(), |name| name.to_string())
-						);
+						let member_name: Member =
+							field.ident.clone().map_or(num.into(), Into::into);
 						let ty = &field.ty;
 
 						parse_quote! {
-							#ident: rng.gen::<#ty>()
+							#member_name: rng.gen::<#ty>()
 						}
 					});
 
