@@ -1,99 +1,54 @@
-use darling::FromDeriveInput;
+use core::num::NonZeroUsize;
+
+use darling::{
+	ast::{Data, Fields},
+	util::Flag,
+	FromDeriveInput, FromField, FromVariant,
+};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
-use syn::{Generics, Ident};
+use syn::{Generics, Ident, Type};
 
 #[derive(FromDeriveInput)]
+#[darling(attributes(standard_distribution), supports(struct_any))]
 pub struct DeriveData {
 	ident: Ident,
 	generics: Generics,
+	// Yes, I'm aware that this is currently marked as only supporting structs. The Variant type
+	// bound is specified here for later, when I'm ready to handle enums.
+	data: Data<DeriveVariant, DeriveField>,
 }
 
 impl ToTokens for DeriveData {
 	fn to_tokens(&self, tokens: &mut TokenStream2) {}
 }
 
-impl DeriveData {
-	/*
-	pub fn create_distribution_impl(&self, item: &Item) -> ItemImpl {
-		let sample_method_code = self.generate_sample_method(item);
+#[derive(FromVariant)]
+#[darling(attributes(standard_distribution))]
+pub struct DeriveVariant {
+	ident: Ident,
+	fields: Fields<DeriveField>,
 
-		match item {
-			Item::Struct(s) => {
-				let struct_name = &s.ident;
-				let trait_bounds_added = self.add_trait_bounds_to_generics(&s.generics);
-				let (impl_generics, ty_generics, where_clause) =
-					trait_bounds_added.split_for_impl();
+	/// If specified, this variant will never be chosen when choosing a random variant.
+	// TODO: Implement this
+	_skip: Flag,
+	/// If specified, sets the weight for this variant to be chosen. `1` is the base, `2` is twice
+	/// as likely, and `5` is five times as likely.
+	///
+	/// If unspecified, the weight for this variant will be `1`.
+	// TODO: Implement this
+	// TODO: Probably change this to a float weight at some point?
+	_weight: Option<NonZeroUsize>,
+}
 
-				parse_quote! {
-					impl #impl_generics ::rand::distributions::Distribution<#struct_name #ty_generics>
-					for ::rand::distributions::Standard #where_clause {
-						fn sample<R: ::rand::Rng + ?Sized>(&self, rng: &mut R) -> #struct_name #ty_generics {
-							#sample_method_code
-						}
-					}
-				}
-			}
-			Item::Enum(_e) => unimplemented!(),
-			_ => unreachable!(),
-		}
-	}
+#[derive(FromField)]
+#[darling(attributes(standard_distribution))]
+pub struct DeriveField {
+	ident: Option<Ident>,
+	ty: Type,
 
-	fn add_trait_bounds_to_generics(&self, generics: &Generics) -> Generics {
-		let mut generics = generics.clone();
-
-		let type_params_bounded: Vec<WherePredicate> = generics
-			.params
-			.iter()
-			.filter_map(|param| {
-				if let GenericParam::Type(type_param) = param {
-					let ident = &type_param.ident;
-					Some(parse_quote! {
-						::rand::distributions::Standard: ::rand::distributions::Distribution< #ident >
-					})
-				} else {
-					None
-				}
-			})
-			.collect();
-
-		generics
-			.make_where_clause()
-			.predicates
-			.extend(type_params_bounded);
-
-		generics
-	}
-
-	fn generate_sample_method(&self, item: &Item) -> ExprStruct {
-		match item {
-			Item::Struct(s) => {
-				let name = &s.ident;
-				let field_values_iter = self.fields_to_field_values(&s.fields).into_iter();
-				parse_quote! {
-					#name {
-						#(#field_values_iter),*
-					}
-				}
-			}
-			Item::Enum(_e) => unimplemented!(),
-			_ => unreachable!(),
-		}
-	}
-
-	fn fields_to_field_values(&self, fields: &Fields) -> impl IntoIterator<Item = FieldValue> {
-		fields
-			.iter()
-			.enumerate()
-			.map::<FieldValue, _>(|(num, field)| {
-				let member_name: Member = field.ident.clone().map_or(num.into(), Into::into);
-				let ty = &field.ty;
-
-				parse_quote! {
-					#member_name: rng.gen::<#ty>()
-				}
-			})
-			.collect::<Vec<_>>()
-	}
-	*/
+	/// If specified, this field will never be randomly generated. Instead, it will be generated
+	/// using the field type's `Default` impl.
+	// TODO: Implement this
+	_skip: Flag,
 }
