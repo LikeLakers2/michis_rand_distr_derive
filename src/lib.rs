@@ -1,4 +1,4 @@
-use darling::{ast::NestedMeta, Error as DarlingError, FromMeta};
+use darling::FromDeriveInput;
 use proc_macro::TokenStream as TokenStream1;
 use syn::parse_macro_input;
 
@@ -6,23 +6,28 @@ mod sample_uniform;
 mod standard_distribution;
 mod uniform_sampler;
 
-#[proc_macro_attribute]
-pub fn add_standard_distribution_support(
-	attr_args_tok: TokenStream1,
-	item_tok: TokenStream1,
+#[proc_macro_derive(StandardDistribution)]
+pub fn derive_standard_distribution(
+	input_item: TokenStream1,
 ) -> TokenStream1 {
-	let item = parse_macro_input!(item_tok);
-	let attr_args = match NestedMeta::parse_meta_list(attr_args_tok.into()) {
+	let derive_input = parse_macro_input!(input_item);
+	let derive_opts = match self::standard_distribution::DeriveData::from_derive_input(&derive_input) {
 		Ok(v) => v,
-		Err(e) => return DarlingError::from(e).write_errors().into(),
+		Err(e) => return e.write_errors().into(),
 	};
-	self::standard_distribution::derive(attr_args, item).into()
+	derive_opts.do_derive().into()
 }
 
-#[proc_macro_attribute]
-pub fn add_uniform_distribution_support(
-	_attr_args_tok: TokenStream1,
-	_item_tok: TokenStream1,
+#[proc_macro_derive(SampleUniform)]
+pub fn derive_sample_uniform(
+	_input_item: TokenStream1,
+) -> TokenStream1 {
+	todo!()
+}
+
+#[proc_macro_derive(UniformSampler)]
+pub fn derive_uniform_sampler(
+	_input_item: TokenStream1,
 ) -> TokenStream1 {
 	todo!()
 }

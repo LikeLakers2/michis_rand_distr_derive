@@ -1,16 +1,16 @@
-use michis_rand_distr_derive::add_standard_distribution_support;
+use michis_rand_distr_derive::StandardDistribution;
 
-#[add_standard_distribution_support]
+#[derive(StandardDistribution)]
 pub struct AStructWithNamedFields {
 	pub x: f32,
 	pub y: f32,
 	pub z: f32,
 }
 
-#[add_standard_distribution_support]
+#[derive(StandardDistribution)]
 pub struct AStructWithTupleFields(pub f32, pub f32, pub f32);
 
-#[add_standard_distribution_support]
+#[derive(StandardDistribution)]
 pub struct AStructWithTypeParams<F> {
 	pub inner: F,
 	pub other_inner: f32,
