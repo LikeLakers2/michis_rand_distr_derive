@@ -1,18 +1,19 @@
 use darling::FromDeriveInput;
 use proc_macro2::TokenStream as TokenStream2;
+use quote::ToTokens;
 use syn::{Generics, Ident};
 
-#[derive(Debug, FromDeriveInput)]
+#[derive(FromDeriveInput)]
 pub struct DeriveData {
 	ident: Ident,
 	generics: Generics,
 }
 
-impl DeriveData {
-	pub fn do_derive(&self) -> TokenStream2 {
-		TokenStream2::new()
-	}
+impl ToTokens for DeriveData {
+	fn to_tokens(&self, tokens: &mut TokenStream2) {}
+}
 
+impl DeriveData {
 	/*
 	pub fn create_distribution_impl(&self, item: &Item) -> ItemImpl {
 		let sample_method_code = self.generate_sample_method(item);
