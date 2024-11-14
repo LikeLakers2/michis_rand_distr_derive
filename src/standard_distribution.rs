@@ -1,11 +1,58 @@
-use darling::FromMeta;
+use darling::{ast::NestedMeta, Error as DarlingError, FromMeta};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{format_ident, ToTokens};
 use syn::{
-	parse_quote, ExprStruct, FieldValue, Fields, GenericParam, Generics, Item, ItemImpl, Member,
-	WherePredicate,
+	parse_quote, ExprStruct, FieldValue, Fields, GenericParam, Generics, Ident, Item, ItemEnum,
+	ItemImpl, ItemStruct, Member, WherePredicate,
 };
+
+pub fn derive(attr_args: Vec<NestedMeta>, item: Item) -> TokenStream2 {
+	// We only support structs currently
+	if !matches!(item, Item::Struct(_)) {
+		return DarlingError::custom(
+			"`#[add_standard_distribution_support]` is only supported for structs",
+		)
+		.write_errors();
+	}
+
+	let resulting_impl = match self::Options::from_list(&attr_args) {
+		Ok(v) => v.create_distribution_impl(&item),
+		Err(e) => return e.write_errors(),
+	};
+
+	let mut ts = TokenStream2::new();
+	item.to_tokens(&mut ts);
+	resulting_impl.to_tokens(&mut ts);
+	ts
+}
 
 #[derive(Debug, FromMeta)]
 pub struct Options {}
+
+pub struct ActingItem {
+	ident: Ident,
+	fields: Fields,
+}
+
+impl ActingItem {
+	fn from_struct(item: ItemStruct) -> Self {
+		Self {
+			ident: item.ident,
+			fields: item.fields,
+		}
+	}
+
+	fn from_enum(item: ItemEnum) -> Vec<Self> {
+		let mut r = vec![];
+		for variant in item.variants {
+			r.push(Self {
+				ident: format_ident!("{}::{}", item.ident, variant.ident),
+				fields: variant.fields,
+			});
+		}
+		r
+	}
+}
 
 impl Options {
 	pub fn create_distribution_impl(&self, item: &Item) -> ItemImpl {
