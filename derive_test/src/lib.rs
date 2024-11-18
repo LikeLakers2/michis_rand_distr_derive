@@ -21,3 +21,23 @@ pub struct SupportsStructsWithTypeParams<F> {
 	pub inner: F,
 	pub other_inner: f32,
 }
+
+#[derive(StandardDistribution)]
+pub enum SupportsEnum {
+	UnitVariant,
+	TupleVariant(f32, f32, f32),
+	NamedVariant { x: f32, y: f32, z: f32 },
+}
+
+#[derive(StandardDistribution)]
+pub enum SupportsEnumWithTypeParams<F> {
+	UnitVariant,
+	TupleVariant(F, f32),
+	NamedVariant { inner: F, other_inner: f32 },
+}
+
+/// Tests that should always panic. Uncomment one to test.
+mod should_panic {
+	//#[derive(StandardDistribution)]
+	//pub enum DoesNotSupportEnumWithNoVariants {}
+}

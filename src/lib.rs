@@ -1,7 +1,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream as TokenStream1;
 use quote::ToTokens;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, Data, DeriveInput};
 
 mod sample_uniform;
 mod standard_distribution;
@@ -15,11 +15,25 @@ mod uniform_sampler;
 /// randomly generate the fields.
 #[proc_macro_derive(StandardDistribution, attributes(standard_distribution))]
 pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
-	let derive_input = parse_macro_input!(input_item);
+	let derive_input = parse_macro_input!(input_item as DeriveInput);
+
+	// Match any erroneous conditions that can't be caught by darling, before passing it to darling.
+	if let Data::Enum(enum_data) = &derive_input.data {
+		if enum_data.variants.is_empty() {
+			panic!("Cannot derive StandardDistribution for enums with zero variants");
+		}
+	}
+
+	// Let's pass it to darling.
 	let derive_data_result =
 		self::standard_distribution::DeriveData::from_derive_input(&derive_input);
+
+	// Finally, generate the output (whether that be an impl or a error)
 	let output = match derive_data_result {
-		Ok(v) => v.into_token_stream(),
+		Ok(mut v) => {
+			v.prepare();
+			v.into_token_stream()
+		}
 		Err(e) => e.write_errors(),
 	};
 	output.into()
