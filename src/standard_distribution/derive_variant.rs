@@ -1,5 +1,5 @@
 use darling::{ast::Fields, util::Flag, FromVariant};
-use syn::{parse_quote, Expr, Ident};
+use syn::{parse_quote, Expr, ExprStruct, Ident};
 
 use super::{derive_field::DeriveField, FieldsExt};
 
@@ -17,11 +17,11 @@ pub struct DeriveVariant {
 	///
 	/// If unspecified, the weight for this variant will be `1`.
 	// TODO: Implement this
-	weight: Option<Expr>,
+	_weight: Option<Expr>,
 }
 
 impl DeriveVariant {
-	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> Expr {
+	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> ExprStruct {
 		let variant_ident = &self.ident;
 		let path = parse_quote! { #enum_name :: #variant_ident };
 		self.fields.to_struct_expression(path)
