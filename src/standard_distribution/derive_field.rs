@@ -1,0 +1,41 @@
+use darling::{ast::Fields, util::Flag, FromField};
+use syn::{parse_quote, Expr, ExprStruct, Ident, Member, Path, Type};
+
+use super::FieldsExt;
+
+#[derive(FromField)]
+#[darling(attributes(standard_distribution))]
+pub struct DeriveField {
+	ident: Option<Ident>,
+	ty: Type,
+
+	/// If specified, this field will never be randomly generated. Instead, it will be generated
+	/// using the field type's `Default` impl.
+	// TODO: Implement this
+	_skip: Flag,
+}
+
+impl DeriveField {
+	pub(crate) fn make_rng_call(&self) -> Expr {
+		let ty = &self.ty;
+		parse_quote! {
+			rng.gen::< #ty >()
+		}
+	}
+}
+
+impl FieldsExt for Fields<DeriveField> {
+	fn to_struct_expression(&self, struct_or_enum_path: Path) -> ExprStruct {
+		let field_names_iter = self
+			.iter()
+			.enumerate()
+			.map::<Member, _>(|(i, field)| field.ident.clone().map_or(i.into(), Into::into));
+		let field_rng_calls = self.iter().map(|field| field.make_rng_call());
+
+		parse_quote! {
+			#struct_or_enum_path {
+				#(#field_names_iter : #field_rng_calls),*
+			}
+		}
+	}
+}

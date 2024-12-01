@@ -1,15 +1,14 @@
-use core::num::NonZeroUsize;
+mod derive_field;
+mod derive_variant;
 
+use self::{derive_field::DeriveField, derive_variant::DeriveVariant};
 use darling::{
-	ast::{Data, Fields},
-	util::Flag,
-	FromDeriveInput, FromField, FromVariant,
+	ast::Data,
+	FromDeriveInput,
 };
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
-use syn::{
-	parse_quote, Arm, Expr, Generics, Ident, ItemImpl, Member, Path, Stmt, Type, WherePredicate,
-};
+use syn::{parse_quote, Arm, ExprStruct, Generics, Ident, ItemImpl, Path, Stmt, WherePredicate};
 
 #[derive(FromDeriveInput)]
 #[darling(attributes(standard_distribution), supports(struct_any, enum_any))]
@@ -67,12 +66,16 @@ impl DeriveData {
 			}
 			Data::Struct(fields) => {
 				let path = parse_quote! { #self_ident };
-				let struct_expression = self::fields_to_struct_expression(path, fields);
+				let struct_expression = fields.to_struct_expression(path);
 				parse_quote! {
 					#struct_expression
 				}
 			}
 		}
+	}
+
+	fn make_code_enum(&self) -> Vec<Stmt> {
+		todo!()
 	}
 }
 
@@ -101,63 +104,7 @@ impl ToTokens for DeriveData {
 	}
 }
 
-#[derive(FromVariant)]
-#[darling(attributes(standard_distribution))]
-pub struct DeriveVariant {
-	ident: Ident,
-	fields: Fields<DeriveField>,
-
-	/// If specified, this variant will never be chosen when choosing a random variant.
-	// TODO: Implement this
-	_skip: Flag,
-	/// If specified, sets the weight for this variant to be chosen. `1` is the base, `2` is twice
-	/// as likely, and `5` is five times as likely.
-	///
-	/// If unspecified, the weight for this variant will be `1`.
-	// TODO: Implement this
-	// TODO: Probably change this to a float weight at some point?
-	_weight: Option<NonZeroUsize>,
-}
-
-impl DeriveVariant {
-	fn make_struct_expression(&self, enum_name: &Ident) -> Expr {
-		let variant_ident = &self.ident;
-		let path = parse_quote! { #enum_name :: #variant_ident };
-		self::fields_to_struct_expression(path, &self.fields)
-	}
-}
-
-#[derive(FromField)]
-#[darling(attributes(standard_distribution))]
-pub struct DeriveField {
-	ident: Option<Ident>,
-	ty: Type,
-
-	/// If specified, this field will never be randomly generated. Instead, it will be generated
-	/// using the field type's `Default` impl.
-	// TODO: Implement this
-	_skip: Flag,
-}
-
-impl DeriveField {
-	fn make_rng_call(&self) -> Expr {
-		let ty = &self.ty;
-		parse_quote! {
-			rng.gen::< #ty >()
-		}
-	}
-}
-
-fn fields_to_struct_expression(path: Path, fields: &Fields<DeriveField>) -> Expr {
-	let field_names_iter = fields
-		.iter()
-		.enumerate()
-		.map::<Member, _>(|(i, field)| field.ident.clone().map_or(i.into(), Into::into));
-	let field_rng_calls = fields.iter().map(|field| field.make_rng_call());
-
-	parse_quote! {
-		#path {
-			#(#field_names_iter : #field_rng_calls),*
-		}
-	}
+trait VecOfVariantsExt {}
+trait FieldsExt {
+	fn to_struct_expression(&self, struct_or_enum_path: Path) -> ExprStruct;
 }

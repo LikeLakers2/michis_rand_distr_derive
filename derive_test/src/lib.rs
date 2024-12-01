@@ -33,6 +33,7 @@ pub enum SupportsEnum {
 pub enum SupportsEnumWithTypeParams<F> {
 	UnitVariant,
 	TupleVariant(F, f32),
+	#[standard_distribution(weight = 0.5)]
 	NamedVariant { inner: F, other_inner: f32 },
 }
 
