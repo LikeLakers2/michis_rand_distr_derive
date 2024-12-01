@@ -1,8 +1,0 @@
-[package]
-name = "derive_test"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-michis_rand_distr_derive = { path = ".." }
-rand = "0.8"

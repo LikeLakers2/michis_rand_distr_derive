@@ -35,15 +35,3 @@ pub enum SupportsEnumWithTypeParams<F> {
 	TupleVariant(F, f32),
 	NamedVariant { inner: F, other_inner: f32 },
 }
-
-/// Tests that should always panic. Uncomment one to test.
-mod should_panic {
-	#[expect(
-		unused_imports,
-		reason = "Tests are commented out by default, and thus don't use the imports."
-	)]
-	use super::*;
-
-	//#[derive(StandardDistribution)]
-	//pub enum DoesNotSupportEnumWithNoVariants {}
-}
