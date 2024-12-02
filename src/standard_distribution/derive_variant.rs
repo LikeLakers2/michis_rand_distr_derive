@@ -73,7 +73,7 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 0 },
 			Self::Float => parse_quote! { 0.0 },
-			Self::Invalid => parse_quote! { "invalid" },
+			Self::Invalid => parse_quote! { "invalid1" },
 		}
 	}
 
@@ -81,7 +81,7 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 1 },
 			Self::Float => parse_quote! { 1.0 },
-			Self::Invalid => parse_quote! { "invalid" },
+			Self::Invalid => parse_quote! { "invalid2" },
 		}
 	}
 }
@@ -182,16 +182,23 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 		})
 		.collect();
 
-	// TODO: Bubble up a `darling::Error` if all variants are skipped
-	// TODO: Bubble up a `darling::Error` if all weights are zero
+	let is_all_weights_zero = weights
+		.iter()
+		.all(|weight| weight == &default_weight_type.get_zero());
+	if is_all_weights_zero {
+		// TODO: Perhaps I should rewrite this error message into an error struct?
+		error_accumulator.push(DarlingError::custom(
+			"There must be at least one variant with a non-zero weight",
+		))
+	}
 
-	error_accumulator.finish().map(|_| {
-		parse_quote! {
-			::rand::distributions::WeightedIndex::new(&[
-				#(#weights),*
-			]).unwrap().sample(rng)
-		}
-	})
+	let res = parse_quote! {
+		::rand::distributions::WeightedIndex::new(&[
+			#(#weights),*
+		]).unwrap().sample(rng)
+	};
+
+	error_accumulator.finish_with(res)
 }
 
 fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
