@@ -1,7 +1,7 @@
 error: proc-macro derive panicked
- --> tests/compile_fail/enum_with_no_variants.rs:3:10
+ --> tests/compile_fail/enum_with_no_variants.rs:4:10
   |
-3 | #[derive(StandardDistribution)]
+4 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^
   |
   = help: message: Cannot derive StandardDistribution for enums with zero variants
