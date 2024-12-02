@@ -1,13 +1,14 @@
-use darling::{ast::Fields, util::Flag, FromVariant};
-use itertools::Itertools as _;
+use darling::{
+	ast::Fields, util::Flag, Error as DarlingError, FromVariant, Result as DarlingResult,
+};
 use syn::{parse_quote, Arm, Expr, ExprStruct, Ident, Lit, Stmt};
 
-use crate::{FieldsExt as _, VecOfVariantsExt};
+use super::{FieldsExt as _, VecOfVariantsExt};
 
 use super::derive_field::DeriveField;
 
 impl VecOfVariantsExt for Vec<DeriveVariant> {
-	fn generate_enum_sample_code(&self, enum_name: &Ident) -> Vec<Stmt> {
+	fn generate_enum_sample_code(&self, enum_name: &Ident) -> DarlingResult<Vec<Stmt>> {
 		let arms = self.iter().enumerate().map::<Arm, _>(|(i, variant)| {
 			let struct_expr = variant.make_struct_expression(enum_name);
 			parse_quote! {
@@ -17,19 +18,19 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 			}
 		});
 
-		let variant_chooser = self::generate_variant_chooser(self);
+		let variant_chooser = self::generate_variant_chooser(self)?;
 
-		parse_quote! {
+		Ok(parse_quote! {
 			let chosen_variant = #variant_chooser;
 			match chosen_variant {
 				#(#arms),*
 				_ => unreachable!(),
 			}
-		}
+		})
 	}
 }
 
-fn generate_variant_chooser(variants: &[DeriveVariant]) -> Expr {
+fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 	// Possible scenarios:
 	// * One or more weighted variants, and no skips (use `WeightedIndex`)
 	// * One or more weighted variants, with skips (use `WeightedIndex`, with skips = 0.0)
@@ -49,57 +50,143 @@ fn generate_variant_chooser(variants: &[DeriveVariant]) -> Expr {
 
 	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
 	if has_skip {
-		return self::generate_variant_chooser_skips_only(variants);
+		return Ok(self::generate_variant_chooser_skips_only(variants));
 	}
 
 	// TODO: Bubble up a `darling::Error` if there are no choosable variants
 	let variant_count = variants.len();
-	parse_quote! {
+	Ok(parse_quote! {
 		rng.gen_range(0..#variant_count)
+	})
+}
+
+#[derive(PartialEq, Eq)]
+enum WeightLitType {
+	Int,
+	Float,
+	Invalid,
+}
+
+impl WeightLitType {
+	fn get_zero(&self) -> Lit {
+		match self {
+			Self::Int => parse_quote! { 0 },
+			Self::Float => parse_quote! { 0.0 },
+			Self::Invalid => parse_quote! { 0 },
+		}
+	}
+
+	fn get_default(&self) -> Lit {
+		match self {
+			Self::Int => parse_quote! { 1 },
+			Self::Float => parse_quote! { 1.0 },
+			Self::Invalid => parse_quote! { 0 },
+		}
 	}
 }
 
-fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> Expr {
-	let first_weighted_variant = variants
-		.iter()
-		.find(|variant| variant.weight.is_some())
-		.unwrap();
-	let (zero_weight, default_weight): (Lit, Lit) = {
-		// We can safely unwrap this because we just found this to have a weight.
-		let weight = first_weighted_variant.weight.clone().unwrap();
-		match weight {
-			Lit::Int(_) => (parse_quote! { 0 }, parse_quote! { 1 }),
-			Lit::Float(_) => (parse_quote! { 0.0 }, parse_quote! { 1.0 }),
+impl TryFrom<Lit> for WeightLitType {
+	type Error = DarlingError;
+
+	fn try_from(value: Lit) -> Result<Self, Self::Error> {
+		match value {
+			Lit::Int(_) => Ok(Self::Int),
+			Lit::Float(_) => Ok(Self::Float),
 			Lit::Str(_)
 			| Lit::ByteStr(_)
 			| Lit::CStr(_)
 			| Lit::Byte(_)
 			| Lit::Char(_)
 			| Lit::Bool(_)
-			| Lit::Verbatim(_) => panic!("Weights must be an Int or Float literal"),
-			_ => panic!("Unknown literal type"),
-			// TODO: The above panics should be a `darling::Error`
+			| Lit::Verbatim(_) => {
+				Err(Self::Error::custom("Weights must be a Int or Float literal").with_span(&value))
+			}
+			_ => Err(
+				Self::Error::custom("Internal error: Unknown literal type provided")
+					.with_span(&value),
+			),
+		}
+	}
+}
+
+/// Finds the weight type of the first weight attribute.
+///
+/// We deliberately avoid checking if the weights are all of the same type. That will be done later
+/// by the type-checker.
+fn get_weight_type(variants: &[DeriveVariant]) -> DarlingResult<WeightLitType> {
+	// Finds the first weight type specified.
+	//
+	// Note: The unwrap here will never panic - because it comes right after a filter to all Options
+	// which have a `Some()` value.
+	let first_weight_type = variants
+		.iter()
+		.map(|variant| &variant.weight)
+		.filter(|&x| x.is_some())
+		.cloned()
+		.map(Option::unwrap)
+		.next();
+
+	if first_weight_type.is_none() {
+		return Err(DarlingError::custom("Internal error: Attempted to get the weight type of an item that doesn't have any weights attached."));
+	}
+
+	// At this point, we know we have at least one weight type. This means it is safe to unwrap.
+	//
+	// Since we want a WeightLitType, we then attempt to convert it to one - and return the result,
+	// whatever that might be.
+	first_weight_type.unwrap().try_into()
+}
+
+fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
+	let mut error_accumulator = DarlingError::accumulator();
+
+	// We must find the default weight type for later. Unfortunately, this results in slightly bad
+	// UI, where if the first weight is an invalid type, only an error for that type
+	let default_weight_type = {
+		let res = error_accumulator.handle(self::get_weight_type(variants));
+		match res {
+			Some(t) => t,
+			None => {
+				// I want to bubble up as many errors as possible, so we use the Invalid variant.
+				WeightLitType::Invalid
+			}
 		}
 	};
 
-	// TODO: Bubble up a `darling::Error` if the weights aren't all the same type
 	// TODO: Bubble up a `darling::Error` if both `skip` and `weight` are specified
 
-	let weights = variants.iter().map(|variant| {
-		if variant.skip.is_present() {
-			zero_weight.clone()
-		} else {
-			variant.weight.clone().unwrap_or(default_weight.clone())
-		}
-	});
+	let weights: Vec<_> = variants
+		.iter()
+		.map(|variant| {
+			if variant.skip.is_present() {
+				return default_weight_type.get_zero();
+			}
+
+			match variant.weight {
+				None => default_weight_type.get_default(),
+				Some(ref w) => {
+					let lit_conversion =
+						error_accumulator.handle(WeightLitType::try_from(w.clone()));
+					match lit_conversion {
+						// If the literal is an invalid type, we'll just toss the default value in,
+						// to avoid further errors.
+						None => default_weight_type.get_default(),
+						Some(_) => w.clone(),
+					}
+				}
+			}
+		})
+		.collect();
 
 	// TODO: Bubble up a `darling::Error` if all weights are zero
 
-	parse_quote! {
-		::rand::distributions::WeightedIndex::new(&[
-			#(#weights),*
-		]).unwrap().sample(rng)
-	}
+	error_accumulator.finish().map(|_| {
+		parse_quote! {
+			::rand::distributions::WeightedIndex::new(&[
+				#(#weights),*
+			]).unwrap().sample(rng)
+		}
+	})
 }
 
 fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> Expr {

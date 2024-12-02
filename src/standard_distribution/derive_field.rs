@@ -1,7 +1,7 @@
 use darling::{ast::Fields, util::Flag, FromField};
 use syn::{parse_quote, Expr, ExprStruct, Ident, Member, Path, Type};
 
-use crate::FieldsExt;
+use super::FieldsExt;
 
 impl FieldsExt for Fields<DeriveField> {
 	fn to_struct_expression(&self, struct_or_enum_path: Path) -> ExprStruct {
@@ -19,7 +19,7 @@ impl FieldsExt for Fields<DeriveField> {
 	}
 }
 
-#[derive(FromField)]
+#[derive(FromField, Debug)]
 #[darling(attributes(standard_distribution))]
 pub struct DeriveField {
 	ident: Option<Ident>,

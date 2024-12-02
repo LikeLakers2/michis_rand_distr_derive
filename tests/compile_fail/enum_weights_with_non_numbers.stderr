@@ -1,0 +1,17 @@
+error: Weights must be a Int or Float literal
+ --> tests/compile_fail/enum_weights_with_non_numbers.rs:6:35
+  |
+6 |     #[standard_distribution(weight = "1.0")]
+  |                                      ^^^^^
+
+error: Weights must be a Int or Float literal
+  --> tests/compile_fail/enum_weights_with_non_numbers.rs:10:35
+   |
+10 |     #[standard_distribution(weight = true)]
+   |                                      ^^^^
+
+error: Weights must be a Int or Float literal
+  --> tests/compile_fail/enum_weights_with_non_numbers.rs:14:35
+   |
+14 |     #[standard_distribution(weight = "abcd")]
+   |                                      ^^^^^^
