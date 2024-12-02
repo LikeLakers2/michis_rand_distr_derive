@@ -1,5 +1,5 @@
 error: There must be at least one variant with a non-zero weight
- --> tests/compile_fail/enum_every_variant_has_zero_weight.rs:4:10
+ --> tests/compile_fail/enums_must_have_a_nonzero_weight.rs:4:10
   |
 4 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^
@@ -7,7 +7,7 @@ error: There must be at least one variant with a non-zero weight
   = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: There must be at least one variant with a non-zero weight
-  --> tests/compile_fail/enum_every_variant_has_zero_weight.rs:10:10
+  --> tests/compile_fail/enums_must_have_a_nonzero_weight.rs:10:10
    |
 10 | #[derive(StandardDistribution)]
    |          ^^^^^^^^^^^^^^^^^^^^
@@ -15,7 +15,7 @@ error: There must be at least one variant with a non-zero weight
    = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: There must be at least one variant with a non-zero weight
-  --> tests/compile_fail/enum_every_variant_has_zero_weight.rs:18:10
+  --> tests/compile_fail/enums_must_have_a_nonzero_weight.rs:18:10
    |
 18 | #[derive(StandardDistribution)]
    |          ^^^^^^^^^^^^^^^^^^^^

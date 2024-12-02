@@ -1,5 +1,5 @@
 error: proc-macro derive panicked
- --> tests/compile_fail/enum_with_no_variants.rs:4:10
+ --> tests/compile_fail/enums_must_have_a_variant.rs:4:10
   |
 4 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^
