@@ -48,3 +48,10 @@ pub fn derive_sample_uniform(_input_item: TokenStream1) -> TokenStream1 {
 pub fn derive_uniform_sampler(_input_item: TokenStream1) -> TokenStream1 {
 	todo!()
 }
+
+trait VecOfVariantsExt {
+	fn generate_enum_sample_code(&self, enum_name: &syn::Ident) -> Vec<syn::Stmt>;
+}
+trait FieldsExt {
+	fn to_struct_expression(&self, struct_or_enum_path: syn::Path) -> syn::ExprStruct;
+}

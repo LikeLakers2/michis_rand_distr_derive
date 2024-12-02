@@ -1,14 +1,13 @@
 mod derive_field;
 mod derive_variant;
 
+use crate::{FieldsExt as _, VecOfVariantsExt as _};
+
 use self::{derive_field::DeriveField, derive_variant::DeriveVariant};
-use darling::{
-	ast::Data,
-	FromDeriveInput,
-};
+use darling::{ast::Data, FromDeriveInput};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
-use syn::{parse_quote, Arm, ExprStruct, Generics, Ident, ItemImpl, Path, Stmt, WherePredicate};
+use syn::{parse_quote, Generics, Ident, ItemImpl, Stmt, WherePredicate};
 
 #[derive(FromDeriveInput)]
 #[darling(attributes(standard_distribution), supports(struct_any, enum_any))]
@@ -46,24 +45,7 @@ impl DeriveData {
 	fn make_code(&self) -> Vec<Stmt> {
 		let self_ident = &self.ident;
 		match &self.data {
-			Data::Enum(variants) => {
-				let variant_count = variants.len();
-				let arms = variants.iter().enumerate().map::<Arm, _>(|(i, variant)| {
-					let struct_expr = variant.make_struct_expression(self_ident);
-					parse_quote! {
-						#i => {
-							#struct_expr
-						}
-					}
-				});
-
-				parse_quote! {
-					match rng.gen_range(0..#variant_count) {
-						#(#arms),*
-						_ => unreachable!(),
-					}
-				}
-			}
+			Data::Enum(variants) => variants.generate_enum_sample_code(self_ident),
 			Data::Struct(fields) => {
 				let path = parse_quote! { #self_ident };
 				let struct_expression = fields.to_struct_expression(path);
@@ -72,10 +54,6 @@ impl DeriveData {
 				}
 			}
 		}
-	}
-
-	fn make_code_enum(&self) -> Vec<Stmt> {
-		todo!()
 	}
 }
 
@@ -102,9 +80,4 @@ impl ToTokens for DeriveData {
 		};
 		distr_impl.to_tokens(tokens);
 	}
-}
-
-trait VecOfVariantsExt {}
-trait FieldsExt {
-	fn to_struct_expression(&self, struct_or_enum_path: Path) -> ExprStruct;
 }
