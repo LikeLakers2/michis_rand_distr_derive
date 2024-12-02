@@ -64,6 +64,8 @@ fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 enum WeightLitType {
 	Int,
 	Float,
+	/// This weight has an invalid literal type. This is used because we want to bubble up as many
+	/// errors as possible, to reduce the number of recompilations needed.
 	Invalid,
 }
 
@@ -72,7 +74,7 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 0 },
 			Self::Float => parse_quote! { 0.0 },
-			Self::Invalid => parse_quote! { 0 },
+			Self::Invalid => parse_quote! { "invalid" },
 		}
 	}
 
@@ -80,7 +82,7 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 1 },
 			Self::Float => parse_quote! { 1.0 },
-			Self::Invalid => parse_quote! { 0 },
+			Self::Invalid => parse_quote! { "invalid" },
 		}
 	}
 }
@@ -140,17 +142,17 @@ fn get_weight_type(variants: &[DeriveVariant]) -> DarlingResult<WeightLitType> {
 fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 	let mut error_accumulator = DarlingError::accumulator();
 
-	// We must find the default weight type for later. Unfortunately, this results in slightly bad
-	// UI, where if the first weight is an invalid type, only an error for that type
+	// We find the type of the first weight literal. This allows us to provide appropriately-typed
+	// values when a variant is either marked as `skip`, or doesn't have a weight associated with
+	// it.
 	let default_weight_type = {
 		let res = error_accumulator.handle(self::get_weight_type(variants));
-		match res {
-			Some(t) => t,
-			None => {
-				// I want to bubble up as many errors as possible, so we use the Invalid variant.
-				WeightLitType::Invalid
-			}
-		}
+		// Unfortunately, if the first weight is not a valid type, it could result in only showing
+		// an error for that first weight.
+		//
+		// In those circumstances, we use `WeightLitType::Invalid`, which gives dummy values for the
+		// default and zero values.
+		res.unwrap_or(WeightLitType::Invalid)
 	};
 
 	// TODO: Bubble up a `darling::Error` if both `skip` and `weight` are specified
@@ -165,11 +167,14 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 			match variant.weight {
 				None => default_weight_type.get_default(),
 				Some(ref w) => {
+					// Ensure that this Lit is a valid literal type, or accumulate an error if it
+					// isn't.
 					let lit_conversion =
 						error_accumulator.handle(WeightLitType::try_from(w.clone()));
 					match lit_conversion {
-						// If the literal is an invalid type, we'll just toss the default value in,
-						// to avoid further errors.
+						// If the literal is an invalid type, we'll just toss the default value in.
+						// This allows us to minimize the number of unnecessary errors, while still
+						// ensuring we pass the type-checker.
 						None => default_weight_type.get_default(),
 						Some(_) => w.clone(),
 					}
