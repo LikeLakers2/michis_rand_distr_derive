@@ -35,3 +35,12 @@ pub struct FieldSkip {
 	#[standard_distribution(skip)]
 	_field3: String,
 }
+
+#[derive(StandardDistribution)]
+pub enum AllButOneVariantSkip {
+	Variant1,
+	#[standard_distribution(skip)]
+	Variant2,
+	#[standard_distribution(skip)]
+	Variant3,
+}

@@ -8,6 +8,7 @@ proc-macro = true
 
 [dependencies]
 darling = "0.20"
+itertools = "0.13"
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }

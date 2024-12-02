@@ -1,4 +1,5 @@
 use darling::{ast::Fields, util::Flag, FromVariant};
+use itertools::Itertools as _;
 use syn::{parse_quote, Arm, Expr, ExprStruct, Ident, Lit, Stmt};
 
 use crate::{FieldsExt as _, VecOfVariantsExt};
@@ -29,76 +30,104 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 }
 
 fn generate_variant_chooser(variants: &[DeriveVariant]) -> Expr {
-	let has_weighted_variant = variants.iter().find(|variant| variant.weight.is_some());
-	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
-
 	// Possible scenarios:
-	// * No weighted variants and no skips (use `rng.gen_range()`)
 	// * One or more weighted variants, and no skips (use `WeightedIndex`)
 	// * One or more weighted variants, with skips (use `WeightedIndex`, with skips = 0.0)
 	// * One or more skips, with no weighted variants (use `SliceRandom`)
+	// * No weighted variants and no skips (use `rng.gen_range()`)
 	// * All variants except one are skipped (generate that variant's index)
 	// * SHOULD FAIL: All weighted variants equal 0
 	// * SHOULD FAIL: All variants are skipped
 
-	if let Some(variant) = has_weighted_variant {
-		let (zero_weight, default_weight): (Lit, Lit) = {
-			// We can safely unwrap this because we just found this to have a weight.
-			let weight = variant.weight.clone().unwrap();
-			match weight {
-				Lit::Int(_) => (parse_quote! { 0 }, parse_quote! { 1 }),
-				Lit::Float(_) => (parse_quote! { 0.0 }, parse_quote! { 1.0 }),
-				Lit::Str(_)
-				| Lit::ByteStr(_)
-				| Lit::CStr(_)
-				| Lit::Byte(_)
-				| Lit::Char(_)
-				| Lit::Bool(_)
-				| Lit::Verbatim(_) => panic!("Weights must be an Int or Float literal"),
-				_ => panic!("Unknown literal type"),
-				// TODO: The above panics should be a `darling::Error`
-			}
-		};
+	// I feel like I may have prematurely optimized... Although, these optimizations produce the
+	// same result, just with Rust's compiler having to do less work.
 
-		// TODO: Bubble up a `darling::Error` if the weights aren't all the same type
+	let has_weighted_variant = variants.iter().any(|variant| variant.weight.is_some());
+	if has_weighted_variant {
+		return self::generate_variant_chooser_weighted(variants);
+	}
 
-		let weights = variants.iter().map(|variant| {
-			if variant.skip.is_present() {
-				zero_weight.clone()
-			} else {
-				variant.weight.clone().unwrap_or(default_weight.clone())
-			}
-		});
+	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
+	if has_skip {
+		return self::generate_variant_chooser_skips_only(variants);
+	}
 
-		// TODO: Bubble up a `darling::Error` if all weights are zero
+	// TODO: Bubble up a `darling::Error` if there are no choosable variants
+	let variant_count = variants.len();
+	parse_quote! {
+		rng.gen_range(0..#variant_count)
+	}
+}
 
-		parse_quote! {
-			::rand::distributions::WeightedIndex::new(&[
-				#(#weights),*
-			]).unwrap().sample(rng)
+fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> Expr {
+	let first_weighted_variant = variants
+		.iter()
+		.find(|variant| variant.weight.is_some())
+		.unwrap();
+	let (zero_weight, default_weight): (Lit, Lit) = {
+		// We can safely unwrap this because we just found this to have a weight.
+		let weight = first_weighted_variant.weight.clone().unwrap();
+		match weight {
+			Lit::Int(_) => (parse_quote! { 0 }, parse_quote! { 1 }),
+			Lit::Float(_) => (parse_quote! { 0.0 }, parse_quote! { 1.0 }),
+			Lit::Str(_)
+			| Lit::ByteStr(_)
+			| Lit::CStr(_)
+			| Lit::Byte(_)
+			| Lit::Char(_)
+			| Lit::Bool(_)
+			| Lit::Verbatim(_) => panic!("Weights must be an Int or Float literal"),
+			_ => panic!("Unknown literal type"),
+			// TODO: The above panics should be a `darling::Error`
 		}
-	} else if has_skip {
-		let choosable_variants = variants
-			.iter()
-			.enumerate()
-			.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i));
+	};
 
-		// TODO: Bubble up a `darling::Error` if there are no choosable variants
+	// TODO: Bubble up a `darling::Error` if the weights aren't all the same type
+	// TODO: Bubble up a `darling::Error` if both `skip` and `weight` are specified
 
-		// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
-		// without a use statement.
-		parse_quote! {
-			{
-				use ::rand::seq::SliceRandom;
-				[#(#choosable_variants),*].choose(rng).unwrap()
-			}
+	let weights = variants.iter().map(|variant| {
+		if variant.skip.is_present() {
+			zero_weight.clone()
+		} else {
+			variant.weight.clone().unwrap_or(default_weight.clone())
 		}
-	} else {
-		// TODO: Bubble up a `darling::Error` if there are no choosable variants
+	});
 
-		let variant_count = variants.len();
-		parse_quote! {
-			rng.gen_range(0..#variant_count)
+	// TODO: Bubble up a `darling::Error` if all weights are zero
+
+	parse_quote! {
+		::rand::distributions::WeightedIndex::new(&[
+			#(#weights),*
+		]).unwrap().sample(rng)
+	}
+}
+
+fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> Expr {
+	let choosable_variants: Vec<_> = variants
+		.iter()
+		.enumerate()
+		.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i))
+		.collect();
+
+	match choosable_variants.len() {
+		0 => panic!("No choosable variants"),
+		1 => {
+			// We can provide a small optimization: If there is only one variant that isn't skipped,
+			// then we can simply select that index.
+
+			// We know there's items in this list, so we can safely unwrap.
+			let single_variant = choosable_variants.first().unwrap();
+			parse_quote! { #single_variant }
+		}
+		_ => {
+			// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
+			// without a use statement.
+			parse_quote! {
+				{
+					use ::rand::seq::SliceRandom;
+					[#(#choosable_variants),*].choose(rng).unwrap()
+				}
+			}
 		}
 	}
 }

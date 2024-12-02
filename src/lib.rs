@@ -32,6 +32,9 @@ mod uniform_sampler;
 /// [`WeightedIndex::new`]. Due to the limitations of `WeightedIndex`, all weights must be of the
 /// same type - you cannot mix floats and ints, for example.
 ///
+/// **Note**: If both the `skip` attribute and a `weight` are applied to an enum variant, the `skip`
+/// attribute will take precedence, and the variant will be given a weight of zero.
+///
 /// [`WeightedIndex::new`]: https://docs.rs/rand/0.8.5/rand/distributions/struct.WeightedIndex.html#method.new
 #[proc_macro_derive(StandardDistribution, attributes(standard_distribution))]
 pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
