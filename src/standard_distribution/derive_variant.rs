@@ -50,10 +50,9 @@ fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 
 	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
 	if has_skip {
-		return Ok(self::generate_variant_chooser_skips_only(variants));
+		return self::generate_variant_chooser_skips_only(variants);
 	}
 
-	// TODO: Bubble up a `darling::Error` if there are no choosable variants
 	let variant_count = variants.len();
 	Ok(parse_quote! {
 		rng.gen_range(0..#variant_count)
@@ -183,6 +182,7 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 		})
 		.collect();
 
+	// TODO: Bubble up a `darling::Error` if all variants are skipped
 	// TODO: Bubble up a `darling::Error` if all weights are zero
 
 	error_accumulator.finish().map(|_| {
@@ -194,7 +194,7 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 	})
 }
 
-fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> Expr {
+fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 	let choosable_variants: Vec<_> = variants
 		.iter()
 		.enumerate()
@@ -202,24 +202,26 @@ fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> Expr {
 		.collect();
 
 	match choosable_variants.len() {
-		0 => panic!("No choosable variants"),
+		0 => Err(DarlingError::custom(
+			"There must be at least one non-skipped variant",
+		)),
 		1 => {
 			// We can provide a small optimization: If there is only one variant that isn't skipped,
 			// then we can simply select that index.
 
 			// We know there's items in this list, so we can safely unwrap.
 			let single_variant = choosable_variants.first().unwrap();
-			parse_quote! { #single_variant }
+			Ok(parse_quote! { #single_variant })
 		}
 		_ => {
 			// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
 			// without a use statement.
-			parse_quote! {
+			Ok(parse_quote! {
 				{
 					use ::rand::seq::SliceRandom;
 					[#(#choosable_variants),*].choose(rng).unwrap()
 				}
-			}
+			})
 		}
 	}
 }

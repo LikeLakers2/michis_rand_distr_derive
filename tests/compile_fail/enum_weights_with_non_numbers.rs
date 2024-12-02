@@ -2,7 +2,7 @@ use michis_rand_distr_derive::StandardDistribution;
 fn main() {}
 
 #[derive(StandardDistribution)]
-pub enum ErrorIfWeightArentNumbers1 {
+pub enum ErrorsIfWeightArentNumbers1 {
 	#[standard_distribution(weight = "1.0")]
 	Variant1,
 	#[standard_distribution(weight = 1.0)]
@@ -16,7 +16,7 @@ pub enum ErrorIfWeightArentNumbers1 {
 }
 
 #[derive(StandardDistribution)]
-pub enum ErrorIfWeightArentNumbers2 {
+pub enum ErrorsIfWeightArentNumbers2 {
 	#[standard_distribution(weight = 1.0)]
 	Variant1,
 	#[standard_distribution(weight = "1.0")]
