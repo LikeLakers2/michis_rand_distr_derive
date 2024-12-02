@@ -29,9 +29,19 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 }
 
 fn generate_variant_chooser(variants: &[DeriveVariant]) -> Expr {
-	let first_weighted_variant = variants.iter().find(|variant| variant.weight.is_some());
+	let has_weighted_variant = variants.iter().find(|variant| variant.weight.is_some());
+	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
 
-	if let Some(variant) = first_weighted_variant {
+	// Possible scenarios:
+	// * No weighted variants and no skips (use `rng.gen_range()`)
+	// * One or more weighted variants, and no skips (use `WeightedIndex`)
+	// * One or more weighted variants, with skips (use `WeightedIndex`, with skips = 0.0)
+	// * One or more skips, with no weighted variants (use `SliceRandom`)
+	// * All variants except one are skipped (generate that variant's index)
+	// * SHOULD FAIL: All weighted variants equal 0
+	// * SHOULD FAIL: All variants are skipped
+
+	if let Some(variant) = has_weighted_variant {
 		let (zero_weight, default_weight): (Lit, Lit) = {
 			// We can safely unwrap this because we just found this to have a weight.
 			let weight = variant.weight.clone().unwrap();
@@ -59,12 +69,33 @@ fn generate_variant_chooser(variants: &[DeriveVariant]) -> Expr {
 				variant.weight.clone().unwrap_or(default_weight.clone())
 			}
 		});
+
+		// TODO: Bubble up a `darling::Error` if all weights are zero
+
 		parse_quote! {
 			::rand::distributions::WeightedIndex::new(&[
 				#(#weights),*
 			]).unwrap().sample(rng)
 		}
+	} else if has_skip {
+		let choosable_variants = variants
+			.iter()
+			.enumerate()
+			.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i));
+
+		// TODO: Bubble up a `darling::Error` if there are no choosable variants
+
+		// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
+		// without a use statement.
+		parse_quote! {
+			{
+				use ::rand::seq::SliceRandom;
+				[#(#choosable_variants),*].choose(rng).unwrap()
+			}
+		}
 	} else {
+		// TODO: Bubble up a `darling::Error` if there are no choosable variants
+
 		let variant_count = variants.len();
 		parse_quote! {
 			rng.gen_range(0..#variant_count)
