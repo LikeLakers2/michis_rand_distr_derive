@@ -29,14 +29,6 @@ pub enum EnumVariantSkip {
 }
 
 #[derive(StandardDistribution)]
-pub struct FieldSkip {
-	_field1: f32,
-	_field2: f64,
-	#[standard_distribution(skip)]
-	_field3: String,
-}
-
-#[derive(StandardDistribution)]
 pub enum AllButOneVariantSkip {
 	Variant1,
 	#[standard_distribution(skip)]
