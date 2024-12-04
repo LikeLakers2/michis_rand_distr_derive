@@ -50,8 +50,8 @@ impl DeriveVariant {
 			mut weight_type,
 		} = self;
 
+		// It is an error if both `weight` and `skip` are present on a variant.
 		if weight.is_some() && skip.is_present() {
-			// It is an error if both `weight` and `skip` are present on a variant.
 			error_accumulator.push(
 				DarlingError::custom("skip and weight may not be specified together")
 					.with_span(&skip.span()),
@@ -64,7 +64,7 @@ impl DeriveVariant {
 		//
 		// If the weight literal is not of a valid type, we will instead propagate an error.
 		if let Some(inner_lit) = weight.clone() {
-			weight_type = error_accumulator.handle(WeightLitType::try_from(inner_lit.clone()));
+			weight_type = error_accumulator.handle(WeightLitType::try_from(inner_lit));
 		}
 
 		// If the weight literal is a valid type, then we can check if the weight is a zero-like

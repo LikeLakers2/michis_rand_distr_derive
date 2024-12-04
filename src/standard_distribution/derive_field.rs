@@ -17,10 +17,8 @@ pub struct DeriveField {
 impl DeriveField {
 	pub(crate) fn make_rng_call(&self) -> Expr {
 		if self.skip.is_present() {
-			// TODO: Compile fail test if a field doesn't implement Default
 			parse_quote! { Default::default() }
 		} else {
-			// TODO: Compile fail test if a field doesn't have `impl Distribution<T> for Standard`
 			let ty = &self.ty;
 			parse_quote! { rng.gen::< #ty >() }
 		}

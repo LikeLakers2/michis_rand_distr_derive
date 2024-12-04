@@ -16,6 +16,7 @@ use syn::{parse_quote, Generics, Ident, ItemImpl, Stmt, WherePredicate};
 pub struct DeriveData {
 	ident: Ident,
 	generics: Generics,
+
 	// Yes, I'm aware that this is currently marked as only supporting structs. The Variant type
 	// bound is specified here for later, when I'm ready to handle enums.
 	data: Data<DeriveVariant, DeriveField>,

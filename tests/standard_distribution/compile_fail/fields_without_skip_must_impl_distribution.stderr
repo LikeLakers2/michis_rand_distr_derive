@@ -1,0 +1,119 @@
+error[E0277]: the trait bound `Standard: Distribution<MyNonRandStruct>` is not satisfied
+ --> tests/standard_distribution/compile_fail/fields_without_skip_must_impl_distribution.rs:9:11
+  |
+9 |         field1: MyNonRandStruct,
+  |                 ^^^^^^^^^^^^^^^ the trait `Distribution<MyNonRandStruct>` is not implemented for `Standard`
+  |
+  = help: the following other types implement trait `Distribution<T>`:
+            `Standard` implements `Distribution<()>`
+            `Standard` implements `Distribution<(A, B)>`
+            `Standard` implements `Distribution<(A, B, C)>`
+            `Standard` implements `Distribution<(A, B, C, D)>`
+            `Standard` implements `Distribution<(A, B, C, D, E)>`
+            `Standard` implements `Distribution<(A, B, C, D, E, F)>`
+            `Standard` implements `Distribution<(A, B, C, D, E, F, G)>`
+            `Standard` implements `Distribution<(A, B, C, D, E, F, G, H)>`
+          and $N others
+note: required by a bound in `gen`
+ --> $CARGO/rand-0.8.5/src/rng.rs
+  |
+  |     fn gen<T>(&mut self) -> T
+  |        --- required by a bound in this associated function
+  |     where Standard: Distribution<T> {
+  |                     ^^^^^^^^^^^^^^^ required by this bound in `Rng::gen`
+
+error[E0277]: the trait bound `Standard: Distribution<MyNonRandStruct>` is not satisfied
+  --> tests/standard_distribution/compile_fail/fields_without_skip_must_impl_distribution.rs:10:11
+   |
+10 |         field2: MyNonRandStruct,
+   |                 ^^^^^^^^^^^^^^^ the trait `Distribution<MyNonRandStruct>` is not implemented for `Standard`
+   |
+   = help: the following other types implement trait `Distribution<T>`:
+             `Standard` implements `Distribution<()>`
+             `Standard` implements `Distribution<(A, B)>`
+             `Standard` implements `Distribution<(A, B, C)>`
+             `Standard` implements `Distribution<(A, B, C, D)>`
+             `Standard` implements `Distribution<(A, B, C, D, E)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G, H)>`
+           and $N others
+note: required by a bound in `gen`
+  --> $CARGO/rand-0.8.5/src/rng.rs
+   |
+   |     fn gen<T>(&mut self) -> T
+   |        --- required by a bound in this associated function
+   |     where Standard: Distribution<T> {
+   |                     ^^^^^^^^^^^^^^^ required by this bound in `Rng::gen`
+
+error[E0277]: the trait bound `Standard: Distribution<MyNonRandStruct>` is not satisfied
+  --> tests/standard_distribution/compile_fail/fields_without_skip_must_impl_distribution.rs:13:10
+   |
+13 |         field: MyNonRandStruct,
+   |                ^^^^^^^^^^^^^^^ the trait `Distribution<MyNonRandStruct>` is not implemented for `Standard`
+   |
+   = help: the following other types implement trait `Distribution<T>`:
+             `Standard` implements `Distribution<()>`
+             `Standard` implements `Distribution<(A, B)>`
+             `Standard` implements `Distribution<(A, B, C)>`
+             `Standard` implements `Distribution<(A, B, C, D)>`
+             `Standard` implements `Distribution<(A, B, C, D, E)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G, H)>`
+           and $N others
+note: required by a bound in `gen`
+  --> $CARGO/rand-0.8.5/src/rng.rs
+   |
+   |     fn gen<T>(&mut self) -> T
+   |        --- required by a bound in this associated function
+   |     where Standard: Distribution<T> {
+   |                     ^^^^^^^^^^^^^^^ required by this bound in `Rng::gen`
+
+error[E0277]: the trait bound `Standard: Distribution<MyNonRandStruct>` is not satisfied
+  --> tests/standard_distribution/compile_fail/fields_without_skip_must_impl_distribution.rs:19:10
+   |
+19 |     field1: MyNonRandStruct,
+   |             ^^^^^^^^^^^^^^^ the trait `Distribution<MyNonRandStruct>` is not implemented for `Standard`
+   |
+   = help: the following other types implement trait `Distribution<T>`:
+             `Standard` implements `Distribution<()>`
+             `Standard` implements `Distribution<(A, B)>`
+             `Standard` implements `Distribution<(A, B, C)>`
+             `Standard` implements `Distribution<(A, B, C, D)>`
+             `Standard` implements `Distribution<(A, B, C, D, E)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G, H)>`
+           and $N others
+note: required by a bound in `gen`
+  --> $CARGO/rand-0.8.5/src/rng.rs
+   |
+   |     fn gen<T>(&mut self) -> T
+   |        --- required by a bound in this associated function
+   |     where Standard: Distribution<T> {
+   |                     ^^^^^^^^^^^^^^^ required by this bound in `Rng::gen`
+
+error[E0277]: the trait bound `Standard: Distribution<MyNonRandStruct>` is not satisfied
+  --> tests/standard_distribution/compile_fail/fields_without_skip_must_impl_distribution.rs:21:10
+   |
+21 |     field3: MyNonRandStruct,
+   |             ^^^^^^^^^^^^^^^ the trait `Distribution<MyNonRandStruct>` is not implemented for `Standard`
+   |
+   = help: the following other types implement trait `Distribution<T>`:
+             `Standard` implements `Distribution<()>`
+             `Standard` implements `Distribution<(A, B)>`
+             `Standard` implements `Distribution<(A, B, C)>`
+             `Standard` implements `Distribution<(A, B, C, D)>`
+             `Standard` implements `Distribution<(A, B, C, D, E)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G)>`
+             `Standard` implements `Distribution<(A, B, C, D, E, F, G, H)>`
+           and $N others
+note: required by a bound in `gen`
+  --> $CARGO/rand-0.8.5/src/rng.rs
+   |
+   |     fn gen<T>(&mut self) -> T
+   |        --- required by a bound in this associated function
+   |     where Standard: Distribution<T> {
+   |                     ^^^^^^^^^^^^^^^ required by this bound in `Rng::gen`

@@ -1,5 +1,5 @@
 error: Cannot derive StandardDistribution for enums with zero variants
- --> tests/derive_fail/enums_must_have_a_variant.rs:4:10
+ --> tests/standard_distribution/derive_fail/enums_must_have_a_variant.rs:4:10
   |
 4 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^
@@ -7,7 +7,7 @@ error: Cannot derive StandardDistribution for enums with zero variants
   = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: There must be at least one non-skipped variant
- --> tests/derive_fail/enums_must_have_a_variant.rs:4:10
+ --> tests/standard_distribution/derive_fail/enums_must_have_a_variant.rs:4:10
   |
 4 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^
