@@ -1,17 +1,17 @@
 error: skip and weight may not be specified together
- --> tests/compile_fail/enum_variants_cannot_have_skip_and_weight.rs:6:26
+ --> tests/derive_fail/enum_variants_cannot_have_skip_and_weight.rs:6:26
   |
 6 |     #[standard_distribution(skip)]
   |                             ^^^^
 
 error: skip and weight may not be specified together
-  --> tests/compile_fail/enum_variants_cannot_have_skip_and_weight.rs:15:26
+  --> tests/derive_fail/enum_variants_cannot_have_skip_and_weight.rs:15:26
    |
 15 |     #[standard_distribution(skip)]
    |                             ^^^^
 
 error: skip and weight may not be specified together
-  --> tests/compile_fail/enum_variants_cannot_have_skip_and_weight.rs:18:26
+  --> tests/derive_fail/enum_variants_cannot_have_skip_and_weight.rs:18:26
    |
 18 |     #[standard_distribution(skip)]
    |                             ^^^^

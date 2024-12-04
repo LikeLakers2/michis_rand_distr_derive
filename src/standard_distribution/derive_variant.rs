@@ -1,6 +1,7 @@
-use darling::util::SpannedValue;
 use darling::{
-	ast::Fields, util::Flag, Error as DarlingError, FromVariant, Result as DarlingResult,
+	ast::Fields,
+	util::{Flag, SpannedValue},
+	Error as DarlingError, FromVariant, Result as DarlingResult,
 };
 use syn::{parse_quote, Arm, Expr, ExprStruct, Ident, Lit, Stmt};
 
@@ -32,6 +33,10 @@ pub struct DeriveVariant {
 	/// and [`PartialOrd`]. However, the parameter must be the same type across all usages of this
 	/// parameter. For example, you cannot use `weight = 1.0` and `weight = 3` in the same enum.
 	weight: Option<Lit>,
+
+	// --- Data populated during `Self::check_and_correct` --- //
+	#[darling(skip)]
+	weight_type: Option<WeightLitType>,
 }
 
 impl DeriveVariant {
@@ -41,24 +46,34 @@ impl DeriveVariant {
 			ident,
 			fields,
 			mut skip,
-			weight,
+			mut weight,
+			mut weight_type,
 		} = self;
 
-		if let Some(lit) = &weight {
-			if skip.is_present() {
-				// We can't have both
-				error_accumulator.push(
-					DarlingError::custom("skip and weight may not be specified together")
-						.with_span(&skip.span()),
-				);
-			}
+		if weight.is_some() && skip.is_present() {
+			// It is an error if both `weight` and `skip` are present on a variant.
+			error_accumulator.push(
+				DarlingError::custom("skip and weight may not be specified together")
+					.with_span(&skip.span()),
+			);
+		}
 
-			let weight_type = {
-				let res = error_accumulator.handle(WeightLitType::try_from(lit.clone()));
-				res.unwrap_or(WeightLitType::Invalid)
-			};
-			if *lit == weight_type.get_zero() {
-				skip = skip.map_ref(|_| Flag::present());
+		// If a weight literal is specified, we want to note down the weight type in a separate
+		// variable. We can calculate this later, but the weight type gets used a lot - so it's
+		// easier to do this now.
+		//
+		// If the weight literal is not of a valid type, we will instead propagate an error.
+		if let Some(inner_lit) = weight.clone() {
+			weight_type = error_accumulator.handle(WeightLitType::try_from(inner_lit.clone()));
+		}
+
+		// If the weight literal is a valid type, then we can check if the weight is a zero-like
+		// value. If so, erase `weight` and set `skip`, as a zero-like value in weight has the same
+		// effect.
+		if let Some(wty) = &weight_type {
+			let zero_lit_opt = weight.take_if(|inner| *inner == wty.get_zero());
+			if let Some(zero_lit) = zero_lit_opt {
+				skip = SpannedValue::new(Flag::present(), zero_lit.span());
 			}
 		}
 
@@ -67,6 +82,7 @@ impl DeriveVariant {
 			fields,
 			skip,
 			weight,
+			weight_type,
 		})
 	}
 
@@ -104,42 +120,10 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 	}
 }
 
-fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
-	// Possible scenarios:
-	// * One or more weighted variants, and no skips (use `WeightedIndex`)
-	// * One or more weighted variants, with skips (use `WeightedIndex`, with skips = 0.0)
-	// * One or more skips, with no weighted variants (use `SliceRandom`)
-	// * No weighted variants and no skips (use `rng.gen_range()`)
-	// * All variants except one are skipped (generate that variant's index)
-	// * SHOULD FAIL: All weighted variants equal 0
-	// * SHOULD FAIL: All variants are skipped
-
-	// I feel like I may have prematurely optimized... Although, these optimizations produce the
-	// same result, just with Rust's compiler having to do less work.
-
-	let has_weighted_variant = variants.iter().any(|variant| variant.weight.is_some());
-	if has_weighted_variant {
-		return self::generate_variant_chooser_weighted(variants);
-	}
-
-	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
-	if has_skip {
-		return self::generate_variant_chooser_skips_only(variants);
-	}
-
-	let variant_count = variants.len();
-	Ok(parse_quote! {
-		rng.gen_range(0..#variant_count)
-	})
-}
-
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum WeightLitType {
 	Int,
 	Float,
-	/// This weight has an invalid literal type. This is used because we want to bubble up as many
-	/// errors as possible, to reduce the number of recompilations needed.
-	Invalid,
 }
 
 impl WeightLitType {
@@ -147,7 +131,6 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 0 },
 			Self::Float => parse_quote! { 0.0 },
-			Self::Invalid => parse_quote! { "invalid1" },
 		}
 	}
 
@@ -155,7 +138,6 @@ impl WeightLitType {
 		match self {
 			Self::Int => parse_quote! { 1 },
 			Self::Float => parse_quote! { 1.0 },
-			Self::Invalid => parse_quote! { "invalid2" },
 		}
 	}
 }
@@ -184,49 +166,38 @@ impl TryFrom<Lit> for WeightLitType {
 	}
 }
 
-/// Finds the weight type of the first weight attribute.
-///
-/// We deliberately avoid checking if the weights are all of the same type. That will be done later
-/// by the type-checker.
-fn get_weight_type(variants: &[DeriveVariant]) -> DarlingResult<WeightLitType> {
-	// Finds the first weight type specified.
-	//
-	// Note: The unwrap here will never panic - because it comes right after a filter to all Options
-	// which have a `Some()` value.
+fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
+	// Possible scenarios that this function could encounter:
+	// * One or more weighted variants (use weighted variant chooser)
+	// * All variants except one are skipped (generate that variant's index)
+	// * One or more skips, with no weighted variants (use non-skipped variant chooser)
+	// * No weighted variants and no skips (use `rng.gen_range()`)
+
+	// If we have any weighted variants, generate a variant chooser that uses weights.
 	let first_weight_type = variants
 		.iter()
-		.map(|variant| &variant.weight)
-		.filter(|&x| x.is_some())
-		.cloned()
-		.map(Option::unwrap)
+		.filter_map(|variant| variant.weight_type)
 		.next();
-
-	if first_weight_type.is_none() {
-		return Err(DarlingError::custom("Internal error: Attempted to get the weight type of an item that doesn't have any weights attached."));
+	if let Some(default_weight_type) = first_weight_type {
+		return self::generate_variant_chooser_weighted(variants, default_weight_type);
 	}
 
-	// At this point, we know we have at least one weight type. This means it is safe to unwrap.
-	//
-	// Since we want a WeightLitType, we then attempt to convert it to one - and return the result,
-	// whatever that might be.
-	first_weight_type.unwrap().try_into()
+	// Otherwise, if we have any variants that are skipped, generate a variant chooser that selects
+	// a random non-skipped variant.
+	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
+	if has_skip {
+		return self::generate_variant_chooser_skips_only(variants);
+	}
+
+	// Otherwise, generate a simple variant chooser.
+	let variant_count = variants.len();
+	Ok(parse_quote! {
+		rng.gen_range(0..#variant_count)
+	})
 }
 
-fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
+fn generate_variant_chooser_weighted(variants: &[DeriveVariant], default_weight_type: WeightLitType) -> DarlingResult<Expr> {
 	let mut error_accumulator = DarlingError::accumulator();
-
-	// We find the type of the first weight literal. This allows us to provide appropriately-typed
-	// values when a variant is either marked as `skip`, or doesn't have a weight associated with
-	// it.
-	let default_weight_type = {
-		let res = error_accumulator.handle(self::get_weight_type(variants));
-		// Unfortunately, if the first weight is not a valid type, it could result in only showing
-		// an error for that first weight.
-		//
-		// In those circumstances, we use `WeightLitType::Invalid`, which gives dummy values for the
-		// default and zero values.
-		res.unwrap_or(WeightLitType::Invalid)
-	};
 
 	let weights: Vec<_> = variants
 		.iter()
