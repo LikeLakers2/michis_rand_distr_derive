@@ -7,6 +7,33 @@ use super::{FieldsExt as _, VecOfVariantsExt};
 
 use super::derive_field::DeriveField;
 
+/// When an enum derives StandardDistribution, the variant returned will be randomly chosen. The
+/// below parameters affect this randomization.
+#[derive(FromVariant)]
+#[darling(attributes(standard_distribution))]
+pub struct DeriveVariant {
+	ident: Ident,
+	fields: Fields<DeriveField>,
+
+	/// If specified, this variant will never be chosen when choosing a random variant.
+	skip: Flag,
+	/// Sets the weight for this variant. A higher weight means this variant is more likely to be
+	/// chosen. If unspecified, the weight for this variant will be `1.0`.
+	///
+	/// This parameter can be any type that implements `rand::distributions::uniform::SampleUniform`
+	/// and [`PartialOrd`]. However, the parameter must be the same type across all usages of this
+	/// parameter. For example, you cannot use `weight = 1.0` and `weight = 3` in the same enum.
+	weight: Option<Lit>,
+}
+
+impl DeriveVariant {
+	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> ExprStruct {
+		let variant_ident = &self.ident;
+		let path = parse_quote! { #enum_name :: #variant_ident };
+		self.fields.to_struct_expression(path)
+	}
+}
+
 impl VecOfVariantsExt for Vec<DeriveVariant> {
 	fn generate_enum_sample_code(&self, enum_name: &Ident) -> DarlingResult<Vec<Stmt>> {
 		let arms = self.iter().enumerate().map::<Arm, _>(|(i, variant)| {
@@ -230,32 +257,5 @@ fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> DarlingRes
 				}
 			})
 		}
-	}
-}
-
-/// When an enum derives StandardDistribution, the variant returned will be randomly chosen. The
-/// below parameters affect this randomization.
-#[derive(FromVariant)]
-#[darling(attributes(standard_distribution))]
-pub struct DeriveVariant {
-	ident: Ident,
-	fields: Fields<DeriveField>,
-
-	/// If specified, this variant will never be chosen when choosing a random variant.
-	skip: Flag,
-	/// Sets the weight for this variant. A higher weight means this variant is more likely to be
-	/// chosen. If unspecified, the weight for this variant will be `1.0`.
-	///
-	/// This parameter can be any type that implements `rand::distributions::uniform::SampleUniform`
-	/// and [`PartialOrd`]. However, the parameter must be the same type across all usages of this
-	/// parameter. For example, you cannot use `weight = 1.0` and `weight = 3` in the same enum.
-	weight: Option<Lit>,
-}
-
-impl DeriveVariant {
-	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> ExprStruct {
-		let variant_ident = &self.ident;
-		let path = parse_quote! { #enum_name :: #variant_ident };
-		self.fields.to_struct_expression(path)
 	}
 }
