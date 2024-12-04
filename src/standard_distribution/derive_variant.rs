@@ -17,9 +17,9 @@ pub struct DeriveVariant {
 	fields: Fields<DeriveField>,
 
 	/// If specified, this variant will never be chosen when choosing a random variant.
-	// NOTE: We are forced to wrap this flag in a SpannedValue. This is because there is no way to
-	// set/unset a `Flag` - something we do within `Self::check_and_correct` when `self.weight` is a
-	// Lit with a zero-like value - without losing the span information.
+	// NOTE: We are forced to wrap this flag in a SpannedValue. This is because there is no other
+	// way to set/unset a `Flag` - something we do within `Self::check_and_correct` when
+	// `self.weight` is a Lit with a zero-like value - without losing the span information.
 	//
 	// Unfortunately, SpannedValue also doesn't inherit the lack of need for `darling(default)`, so
 	// we have to tag it as such.
