@@ -1,8 +1,6 @@
 use darling::{ast::Fields, util::Flag, FromField};
 use syn::{parse_quote, Expr, ExprStruct, Ident, Member, Path, Type};
 
-use super::FieldsExt;
-
 #[derive(FromField, Debug)]
 #[darling(attributes(standard_distribution))]
 pub struct DeriveField {
@@ -25,18 +23,19 @@ impl DeriveField {
 	}
 }
 
-impl FieldsExt for Fields<DeriveField> {
-	fn to_struct_expression(&self, struct_or_enum_path: Path) -> ExprStruct {
-		let field_names_iter = self
-			.iter()
-			.enumerate()
-			.map::<Member, _>(|(i, field)| field.ident.clone().map_or(i.into(), Into::into));
-		let field_rng_calls = self.iter().map(|field| field.make_rng_call());
+pub(crate) fn fields_to_struct_expression(
+	fields: &Fields<DeriveField>,
+	struct_or_enum_path: Path,
+) -> ExprStruct {
+	let field_names_iter = fields
+		.iter()
+		.enumerate()
+		.map::<Member, _>(|(i, field)| field.ident.clone().map_or(i.into(), Into::into));
+	let field_rng_calls = fields.iter().map(|field| field.make_rng_call());
 
-		parse_quote! {
-			#struct_or_enum_path {
-				#(#field_names_iter : #field_rng_calls),*
-			}
+	parse_quote! {
+		#struct_or_enum_path {
+			#(#field_names_iter : #field_rng_calls),*
 		}
 	}
 }

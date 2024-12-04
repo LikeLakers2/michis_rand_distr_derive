@@ -5,8 +5,6 @@ use darling::{
 };
 use syn::{parse_quote, Arm, Expr, ExprStruct, Ident, Lit, Stmt};
 
-use super::{FieldsExt as _, VecOfVariantsExt};
-
 use super::derive_field::DeriveField;
 
 /// When an enum derives StandardDistribution, the variant returned will be randomly chosen. The
@@ -89,109 +87,11 @@ impl DeriveVariant {
 	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> ExprStruct {
 		let variant_ident = &self.ident;
 		let path = parse_quote! { #enum_name :: #variant_ident };
-		self.fields.to_struct_expression(path)
+		super::derive_field::fields_to_struct_expression(&self.fields, path)
 	}
 
 	pub fn is_skipped(&self) -> bool {
 		self.skip.is_present()
-	}
-}
-
-impl VecOfVariantsExt for Vec<DeriveVariant> {
-	fn generate_enum_sample_code(&self, enum_name: &Ident) -> DarlingResult<Vec<Stmt>> {
-		let arms = self.iter().enumerate().map::<Arm, _>(|(i, variant)| {
-			let struct_expr = variant.make_struct_expression(enum_name);
-			parse_quote! {
-				#i => {
-					#struct_expr
-				}
-			}
-		});
-
-		let variant_chooser = self.generate_variant_chooser()?;
-
-		Ok(parse_quote! {
-			let chosen_variant = #variant_chooser;
-			match chosen_variant {
-				#(#arms),*
-				_ => unreachable!(),
-			}
-		})
-	}
-
-	fn generate_variant_chooser(&self) -> DarlingResult<Expr> {
-		// If we have any weighted variants, generate a variant chooser that uses weights.
-		let first_weight_type = self.iter().filter_map(|variant| variant.weight_type).next();
-		if let Some(default_weight_type) = first_weight_type {
-			let weights: Vec<_> = self
-				.iter()
-				.map(|variant| {
-					// If skip was specified (or if the user specified a zero-value weight), then we
-					// make this variant's weight a zero-value of the default weight type.
-					if variant.skip.is_present() {
-						return default_weight_type.get_zero();
-					}
-
-					// If a weight type is set on this variant, then that means there's also a
-					// weight set. In that case, we can safely unwrap the weight.
-					//
-					// Otherwise, use a default-value.
-					match variant.weight_type {
-						None => default_weight_type.get_default(),
-						Some(_) => variant.weight.clone().unwrap(),
-					}
-				})
-				.collect();
-
-			let res = Ok(parse_quote! {
-				::rand::distributions::WeightedIndex::new(&[
-					#(#weights),*
-				]).unwrap().sample(rng)
-			});
-
-			return res;
-		}
-
-		// Otherwise, choose our generator based on how many choosable variants there are.
-		let choosable_variants: Vec<_> = self
-			.iter()
-			.enumerate()
-			.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i))
-			.collect();
-		match choosable_variants.len() {
-			// If we have zero choosable variants, then we've messed up somewhere else (likely
-			// within `DeriveVariant::check_and_correct`). In any case, we should panic here.
-			0 => unreachable!("Internal error: Attempted to generate a variant chooser without any choosable variants"),
-
-			// If we have only one choosable variant, then we can perform a small optimization: Just
-			// choose that index!
-			1 => {
-				// We know there's items in this list, so we can safely unwrap.
-				let single_variant = choosable_variants.first().unwrap();
-				Ok(parse_quote! { #single_variant })
-			}
-
-			// If all variants are unskipped, then we don't need to generate anything more than a
-			// single index.
-			count if count == self.len() => {
-				Ok(parse_quote! {
-					rng.gen_range(0..#count)
-				})
-			}
-
-			// Otherwise, we know our number of unskipped variants is not equal to our number of
-			// variants. In this case, we choose from a list of unskipped variants.
-			_ => {
-				// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its
-				// functions without a use statement.
-				Ok(parse_quote! {
-					{
-						use ::rand::seq::SliceRandom;
-						[#(#choosable_variants),*].choose(rng).unwrap()
-					}
-				})
-			}
-		}
 	}
 }
 
@@ -237,6 +137,114 @@ impl TryFrom<Lit> for WeightLitType {
 				Self::Error::custom("Internal error: Unknown literal type provided")
 					.with_span(&value),
 			),
+		}
+	}
+}
+
+pub(crate) fn generate_enum_sample_code(
+	variants: &[DeriveVariant],
+	enum_name: &Ident,
+) -> DarlingResult<Vec<Stmt>> {
+	let arms = variants.iter().enumerate().map::<Arm, _>(|(i, variant)| {
+		let struct_expr = variant.make_struct_expression(enum_name);
+		parse_quote! {
+			#i => {
+				#struct_expr
+			}
+		}
+	});
+
+	let variant_chooser = self::generate_variant_chooser(variants)?;
+
+	Ok(parse_quote! {
+		let chosen_variant = #variant_chooser;
+		match chosen_variant {
+			#(#arms),*
+			_ => unreachable!(),
+		}
+	})
+}
+
+/// Generates the code that chooses which variant to generate.
+///
+/// This code must return a zero-based index, within the bounds `(0..variant_count)`, where
+/// `variant_count` is the number of variants in the enum. The index itself points to a specific
+/// variant, with `0` referring to the topmost variant (as written in the user's code), `1`
+/// referring to the variant just below that, and so on.
+fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
+	// If we have any weighted variants, generate a variant chooser that uses weights.
+	let first_weight_type = variants
+		.iter()
+		.filter_map(|variant| variant.weight_type)
+		.next();
+	if let Some(default_weight_type) = first_weight_type {
+		let weights: Vec<_> = variants
+			.iter()
+			.map(|variant| {
+				// If skip was specified (or if the user specified a zero-value weight), then we
+				// make this variant's weight a zero-value of the default weight type.
+				if variant.skip.is_present() {
+					return default_weight_type.get_zero();
+				}
+
+				// If a weight type is set on this variant, then that means there's also a weight
+				// set. In that case, we can safely unwrap the weight.
+				//
+				// Otherwise, use a default-value.
+				match variant.weight_type {
+					None => default_weight_type.get_default(),
+					Some(_) => variant.weight.clone().unwrap(),
+				}
+			})
+			.collect();
+
+		let res = Ok(parse_quote! {
+			::rand::distributions::WeightedIndex::new(&[
+				#(#weights),*
+			]).unwrap().sample(rng)
+		});
+
+		return res;
+	}
+
+	// Otherwise, choose our generator based on how many choosable variants there are.
+	let choosable_variants: Vec<_> = variants
+		.iter()
+		.enumerate()
+		.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i))
+		.collect();
+	match choosable_variants.len() {
+		// If we have zero choosable variants, then we've messed up somewhere else (likely within
+		// `DeriveVariant::check_and_correct`). In any case, we should panic here.
+		0 => unreachable!("Internal error: Attempted to generate a variant chooser without any choosable variants"),
+
+		// If we have only one choosable variant, then we can perform a small optimization: Just
+		// choose that index!
+		1 => {
+			// We know there's items in this list, so we can safely unwrap.
+			let single_variant = choosable_variants.first().unwrap();
+			Ok(parse_quote! { #single_variant })
+		}
+
+		// If all variants are unskipped, then we don't need to generate anything more than a single
+		// index.
+		count if count == variants.len() => {
+			Ok(parse_quote! {
+				rng.gen_range(0..#count)
+			})
+		}
+
+		// Otherwise, we know our number of unskipped variants is not equal to our number of
+		// variants. In this case, we choose from a list of unskipped variants.
+		_ => {
+			// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
+			// without a use statement.
+			Ok(parse_quote! {
+				{
+					use ::rand::seq::SliceRandom;
+					[#(#choosable_variants),*].choose(rng).unwrap()
+				}
+			})
 		}
 	}
 }
