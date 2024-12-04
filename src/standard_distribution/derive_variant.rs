@@ -108,7 +108,7 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 			}
 		});
 
-		let variant_chooser = self::generate_variant_chooser(self)?;
+		let variant_chooser = self.generate_variant_chooser()?;
 
 		Ok(parse_quote! {
 			let chosen_variant = #variant_chooser;
@@ -117,6 +117,81 @@ impl VecOfVariantsExt for Vec<DeriveVariant> {
 				_ => unreachable!(),
 			}
 		})
+	}
+
+	fn generate_variant_chooser(&self) -> DarlingResult<Expr> {
+		// If we have any weighted variants, generate a variant chooser that uses weights.
+		let first_weight_type = self.iter().filter_map(|variant| variant.weight_type).next();
+		if let Some(default_weight_type) = first_weight_type {
+			let weights: Vec<_> = self
+				.iter()
+				.map(|variant| {
+					// If skip was specified (or if the user specified a zero-value weight), then we
+					// make this variant's weight a zero-value of the default weight type.
+					if variant.skip.is_present() {
+						return default_weight_type.get_zero();
+					}
+
+					// If a weight type is set on this variant, then that means there's also a
+					// weight set. In that case, we can safely unwrap the weight.
+					//
+					// Otherwise, use a default-value.
+					match variant.weight_type {
+						None => default_weight_type.get_default(),
+						Some(_) => variant.weight.clone().unwrap(),
+					}
+				})
+				.collect();
+
+			let res = Ok(parse_quote! {
+				::rand::distributions::WeightedIndex::new(&[
+					#(#weights),*
+				]).unwrap().sample(rng)
+			});
+
+			return res;
+		}
+
+		// Otherwise, choose our generator based on how many choosable variants there are.
+		let choosable_variants: Vec<_> = self
+			.iter()
+			.enumerate()
+			.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i))
+			.collect();
+		match choosable_variants.len() {
+			// If we have zero choosable variants, then we've messed up somewhere else (likely
+			// within `DeriveVariant::check_and_correct`). In any case, we should panic here.
+			0 => unreachable!("Internal error: Attempted to generate a variant chooser without any choosable variants"),
+
+			// If we have only one choosable variant, then we can perform a small optimization: Just
+			// choose that index!
+			1 => {
+				// We know there's items in this list, so we can safely unwrap.
+				let single_variant = choosable_variants.first().unwrap();
+				Ok(parse_quote! { #single_variant })
+			}
+
+			// If all variants are unskipped, then we don't need to generate anything more than a
+			// single index.
+			count if count == self.len() => {
+				Ok(parse_quote! {
+					rng.gen_range(0..#count)
+				})
+			}
+
+			// Otherwise, we know our number of unskipped variants is not equal to our number of
+			// variants. In this case, we choose from a list of unskipped variants.
+			_ => {
+				// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its
+				// functions without a use statement.
+				Ok(parse_quote! {
+					{
+						use ::rand::seq::SliceRandom;
+						[#(#choosable_variants),*].choose(rng).unwrap()
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -162,110 +237,6 @@ impl TryFrom<Lit> for WeightLitType {
 				Self::Error::custom("Internal error: Unknown literal type provided")
 					.with_span(&value),
 			),
-		}
-	}
-}
-
-fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
-	// Possible scenarios that this function could encounter:
-	// * One or more weighted variants (use weighted variant chooser)
-	// * All variants except one are skipped (generate that variant's index)
-	// * One or more skips, with no weighted variants (use non-skipped variant chooser)
-	// * No weighted variants and no skips (use `rng.gen_range()`)
-
-	// If we have any weighted variants, generate a variant chooser that uses weights.
-	let first_weight_type = variants
-		.iter()
-		.filter_map(|variant| variant.weight_type)
-		.next();
-	if let Some(default_weight_type) = first_weight_type {
-		return self::generate_variant_chooser_weighted(variants, default_weight_type);
-	}
-
-	// Otherwise, if we have any variants that are skipped, generate a variant chooser that selects
-	// a random non-skipped variant.
-	let has_skip = variants.iter().any(|variant| variant.skip.is_present());
-	if has_skip {
-		return self::generate_variant_chooser_skips_only(variants);
-	}
-
-	// Otherwise, generate a simple variant chooser.
-	let variant_count = variants.len();
-	Ok(parse_quote! {
-		rng.gen_range(0..#variant_count)
-	})
-}
-
-fn generate_variant_chooser_weighted(
-	variants: &[DeriveVariant],
-	default_weight_type: WeightLitType,
-) -> DarlingResult<Expr> {
-	let mut error_accumulator = DarlingError::accumulator();
-
-	let weights: Vec<_> = variants
-		.iter()
-		.map(|variant| {
-			if variant.skip.is_present() {
-				return default_weight_type.get_zero();
-			}
-
-			match variant.weight {
-				None => default_weight_type.get_default(),
-				Some(ref w) => {
-					// Ensure that this Lit is a valid literal type, or accumulate an error if it
-					// isn't.
-					let lit_conversion =
-						error_accumulator.handle(WeightLitType::try_from(w.clone()));
-					match lit_conversion {
-						// If the literal is an invalid type, we'll just toss the default value in.
-						// This allows us to minimize the number of unnecessary errors, while still
-						// ensuring we pass the type-checker.
-						None => default_weight_type.get_default(),
-						Some(_) => w.clone(),
-					}
-				}
-			}
-		})
-		.collect();
-
-	let res = parse_quote! {
-		::rand::distributions::WeightedIndex::new(&[
-			#(#weights),*
-		]).unwrap().sample(rng)
-	};
-
-	error_accumulator.finish_with(res)
-}
-
-fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
-	let choosable_variants: Vec<_> = variants
-		.iter()
-		.enumerate()
-		.filter_map(|(i, variant)| (!variant.skip.is_present()).then_some(i))
-		.collect();
-
-	match choosable_variants.len() {
-		// Thanks to `DeriveVariant::check_and_correct`, we should always have at least one
-		// choosable variant if we get to this point. If we still somehow get here with zero
-		// choosable variants, we should probably panic.
-		0 => unreachable!("Internal error: Attempted to generate a variant chooser without any choosable variants"),
-		// If we have only one choosable variant, then we can perform a small optimization: Just
-		// choose that index!
-		1 => {
-
-			// We know there's items in this list, so we can safely unwrap.
-			let single_variant = choosable_variants.first().unwrap();
-			Ok(parse_quote! { #single_variant })
-		}
-		_ => {
-			// NOTE: We must make an ExprBlock here, as SliceRandom has no way to call its functions
-			// without a use statement.
-			Ok(parse_quote! {
-				{
-					use ::rand::seq::SliceRandom;
-					[#(#choosable_variants),*].choose(rng).unwrap()
-				}
-			})
 		}
 	}
 }

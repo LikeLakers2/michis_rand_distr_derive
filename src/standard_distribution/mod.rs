@@ -120,7 +120,15 @@ impl ToTokens for DeriveData {
 
 trait VecOfVariantsExt {
 	fn generate_enum_sample_code(&self, enum_name: &syn::Ident) -> DarlingResult<Vec<syn::Stmt>>;
+	/// Generates the code that chooses which variant to generate.
+	///
+	/// This code must return a zero-based index, within the bounds `(0..variant_count)`, where
+	/// `variant_count` is the number of variants in the enum. The index itself points to a specific
+	/// variant, with `0` referring to the topmost variant (as written in the user's code), `1`
+	/// referring to the variant just below that, and so on.
+	fn generate_variant_chooser(&self) -> DarlingResult<syn::Expr>;
 }
+
 trait FieldsExt {
 	fn to_struct_expression(&self, struct_or_enum_path: syn::Path) -> syn::ExprStruct;
 }
