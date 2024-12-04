@@ -13,3 +13,27 @@ error: There must be at least one non-skipped variant
    |          ^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: There must be at least one non-skipped variant
+  --> tests/compile_fail/enums_must_have_one_nonskipped_variant.rs:18:10
+   |
+18 | #[derive(StandardDistribution)]
+   |          ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: There must be at least one non-skipped variant
+  --> tests/compile_fail/enums_must_have_one_nonskipped_variant.rs:24:10
+   |
+24 | #[derive(StandardDistribution)]
+   |          ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: There must be at least one non-skipped variant
+  --> tests/compile_fail/enums_must_have_one_nonskipped_variant.rs:32:10
+   |
+32 | #[derive(StandardDistribution)]
+   |          ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the derive macro `StandardDistribution` (in Nightly builds, run with -Z macro-backtrace for more info)

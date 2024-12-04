@@ -1,3 +1,4 @@
+use darling::util::SpannedValue;
 use darling::{
 	ast::Fields, util::Flag, Error as DarlingError, FromVariant, Result as DarlingResult,
 };
@@ -10,13 +11,14 @@ use super::derive_field::DeriveField;
 /// When an enum derives StandardDistribution, the variant returned will be randomly chosen. The
 /// below parameters affect this randomization.
 #[derive(FromVariant)]
-#[darling(attributes(standard_distribution))]
+#[darling(attributes(standard_distribution), and_then = Self::check_and_correct)]
 pub struct DeriveVariant {
 	ident: Ident,
 	fields: Fields<DeriveField>,
 
 	/// If specified, this variant will never be chosen when choosing a random variant.
-	skip: Flag,
+	#[darling(default)]
+	skip: SpannedValue<Flag>,
 	/// Sets the weight for this variant. A higher weight means this variant is more likely to be
 	/// chosen. If unspecified, the weight for this variant will be `1.0`.
 	///
@@ -27,10 +29,49 @@ pub struct DeriveVariant {
 }
 
 impl DeriveVariant {
+	fn check_and_correct(self) -> DarlingResult<Self> {
+		let mut error_accumulator = DarlingError::accumulator();
+		let Self {
+			ident,
+			fields,
+			mut skip,
+			weight,
+		} = self;
+
+		if let Some(lit) = &weight {
+			if skip.is_present() {
+				// We can't have both
+				error_accumulator.push(
+					DarlingError::custom("skip and weight may not be specified together")
+						.with_span(&skip.span()),
+				);
+			}
+
+			let weight_type = {
+				let res = error_accumulator.handle(WeightLitType::try_from(lit.clone()));
+				res.unwrap_or(WeightLitType::Invalid)
+			};
+			if *lit == weight_type.get_zero() {
+				skip = skip.map_ref(|_| Flag::present());
+			}
+		}
+
+		error_accumulator.finish_with(Self {
+			ident,
+			fields,
+			skip,
+			weight,
+		})
+	}
+
 	pub(crate) fn make_struct_expression(&self, enum_name: &Ident) -> ExprStruct {
 		let variant_ident = &self.ident;
 		let path = parse_quote! { #enum_name :: #variant_ident };
 		self.fields.to_struct_expression(path)
+	}
+
+	pub fn is_skipped(&self) -> bool {
+		self.skip.is_present()
 	}
 }
 
@@ -181,8 +222,6 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 		res.unwrap_or(WeightLitType::Invalid)
 	};
 
-	// TODO: Bubble up a `darling::Error` if both `skip` and `weight` are specified
-
 	let weights: Vec<_> = variants
 		.iter()
 		.map(|variant| {
@@ -209,16 +248,6 @@ fn generate_variant_chooser_weighted(variants: &[DeriveVariant]) -> DarlingResul
 		})
 		.collect();
 
-	let is_all_weights_zero = weights
-		.iter()
-		.all(|weight| weight == &default_weight_type.get_zero());
-	if is_all_weights_zero {
-		// TODO: Perhaps I should rewrite this error message into an error struct?
-		error_accumulator.push(DarlingError::custom(
-			"There must be at least one variant with a non-zero weight",
-		))
-	}
-
 	let res = parse_quote! {
 		::rand::distributions::WeightedIndex::new(&[
 			#(#weights),*
@@ -236,12 +265,13 @@ fn generate_variant_chooser_skips_only(variants: &[DeriveVariant]) -> DarlingRes
 		.collect();
 
 	match choosable_variants.len() {
-		0 => Err(DarlingError::custom(
-			"There must be at least one non-skipped variant",
-		)),
+		// Thanks to `DeriveVariant::check_and_correct`, we should always have at least one
+		// choosable variant if we get to this point. If we still somehow get here with zero
+		// choosable variants, we should probably panic.
+		0 => unreachable!("Internal error: Attempted to generate a variant chooser without any choosable variants"),
+		// If we have only one choosable variant, then we can perform a small optimization: Just
+		// choose that index!
 		1 => {
-			// We can provide a small optimization: If there is only one variant that isn't skipped,
-			// then we can simply select that index.
 
 			// We know there's items in this list, so we can safely unwrap.
 			let single_variant = choosable_variants.first().unwrap();

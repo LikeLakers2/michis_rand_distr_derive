@@ -2,13 +2,17 @@ mod derive_field;
 mod derive_variant;
 
 use self::{derive_field::DeriveField, derive_variant::DeriveVariant};
-use darling::{ast::Data, FromDeriveInput, Result as DarlingResult};
+use darling::{ast::Data, Error as DarlingError, FromDeriveInput, Result as DarlingResult};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use syn::{parse_quote, Generics, Ident, ItemImpl, Stmt, WherePredicate};
 
 #[derive(FromDeriveInput)]
-#[darling(attributes(standard_distribution), supports(struct_any, enum_any))]
+#[darling(
+	attributes(standard_distribution),
+	supports(struct_any, enum_any),
+	and_then = Self::check_and_correct
+)]
 pub struct DeriveData {
 	ident: Ident,
 	generics: Generics,
@@ -18,13 +22,34 @@ pub struct DeriveData {
 }
 
 impl DeriveData {
-	pub(crate) fn prepare(&mut self) {
-		self.prepare_where_clause();
-	}
+	fn check_and_correct(self) -> DarlingResult<Self> {
+		let mut error_accumulator = DarlingError::accumulator();
+		let Self {
+			ident,
+			mut generics,
+			data,
+		} = self;
 
-	fn prepare_where_clause(&mut self) {
-		let type_param_idents: Vec<WherePredicate> = self
-			.generics
+		// Check for erroneous conditions with the DeriveData
+		if let Data::Enum(enum_data) = &data {
+			// We cannot create an instance of an enum if it has zero variants.
+			if enum_data.is_empty() {
+				error_accumulator.push(DarlingError::custom(
+					"Cannot derive StandardDistribution for enums with zero variants",
+				))
+			}
+
+			// We cannot create an enum without choosing a variant.
+			let is_all_weights_zero = enum_data.iter().all(|variant| variant.is_skipped());
+			if is_all_weights_zero {
+				error_accumulator.push(DarlingError::custom(
+					"There must be at least one non-skipped variant",
+				))
+			}
+		}
+
+		// Prepare the WhereClause
+		let type_param_idents: Vec<WherePredicate> = generics
 			.type_params()
 			.map(|tp| {
 				let ident = &tp.ident;
@@ -34,10 +59,17 @@ impl DeriveData {
 			})
 			.collect();
 
-		self.generics
+		generics
 			.make_where_clause()
 			.predicates
 			.extend(type_param_idents);
+
+		// We are finished checking and correcting
+		error_accumulator.finish_with(Self {
+			ident,
+			generics,
+			data,
+		})
 	}
 
 	fn make_code(&self) -> DarlingResult<Vec<Stmt>> {
