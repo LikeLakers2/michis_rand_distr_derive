@@ -196,7 +196,10 @@ fn generate_variant_chooser(variants: &[DeriveVariant]) -> DarlingResult<Expr> {
 	})
 }
 
-fn generate_variant_chooser_weighted(variants: &[DeriveVariant], default_weight_type: WeightLitType) -> DarlingResult<Expr> {
+fn generate_variant_chooser_weighted(
+	variants: &[DeriveVariant],
+	default_weight_type: WeightLitType,
+) -> DarlingResult<Expr> {
 	let mut error_accumulator = DarlingError::accumulator();
 
 	let weights: Vec<_> = variants
