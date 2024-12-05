@@ -54,9 +54,20 @@ pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
 //   * If unspecified, the sampler path will be `self::<T>UniformSampler`, where `<T>` is the input
 //     item's name. This means that if you attach both `#[derive(SampleUniform)]` and
 //     `#[generate_sampler_uniform]` to an item, it will already be linked.
+//
+// TODO: Write tests
 #[proc_macro_derive(SampleUniform, attributes(sample_uniform))]
-pub fn derive_sample_uniform(_input_item: TokenStream1) -> TokenStream1 {
-	todo!()
+pub fn derive_sample_uniform(input_item: TokenStream1) -> TokenStream1 {
+	let derive_input = parse_macro_input!(input_item);
+
+	let derive_data_result =
+		self::derive_sample_uniform::DeriveData::from_derive_input(&derive_input);
+
+	let output = match derive_data_result {
+		Ok(v) => v.into_token_stream(),
+		Err(e) => e.write_errors(),
+	};
+	output.into()
 }
 
 // note: could we maybe have parameters that link specific fields in the uniform sampler, to the
