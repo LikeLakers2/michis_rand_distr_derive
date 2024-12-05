@@ -62,6 +62,13 @@ pub fn derive_sample_uniform(_input_item: TokenStream1) -> TokenStream1 {
 	todo!()
 }
 
+// note: could we maybe have parameters that link specific fields in the uniform sampler, to the
+// fields in the sampled type? i.e. `#[uniform_sampler(linked_field_name = "x")] x_gen: f32`
+#[proc_macro_derive(UniformSampler, attributes(uniform_sampler))]
+pub fn derive_uniform_sampler(_input_item: TokenStream1) -> TokenStream1 {
+	todo!()
+}
+
 /// Generates a UniformSampler based on the input item.
 ///
 /// The UniformSampler is placed in the same module as the input item.
@@ -75,12 +82,5 @@ pub fn generate_uniform_sampler(
 	_input_attrs: TokenStream1,
 	_input_item: TokenStream1,
 ) -> TokenStream1 {
-	todo!()
-}
-
-// note: could we maybe have parameters that link specific fields in the uniform sampler, to the
-// fields in the sampled type? i.e. `#[uniform_sampler(linked_field_name = "x")] x_gen: f32`
-#[proc_macro_derive(UniformSampler, attributes(uniform_sampler))]
-pub fn derive_uniform_sampler(_input_item: TokenStream1) -> TokenStream1 {
 	todo!()
 }
