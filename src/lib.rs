@@ -1,7 +1,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream as TokenStream1;
 use quote::ToTokens;
-use syn::{parse_macro_input, DeriveInput};
+use syn::parse_macro_input;
 
 mod derive_sample_uniform;
 mod derive_standard_distribution;
@@ -35,13 +35,11 @@ mod generate_uniform_sampler;
 /// [`WeightedIndex::new`]: https://docs.rs/rand/0.8.5/rand/distributions/struct.WeightedIndex.html#method.new
 #[proc_macro_derive(StandardDistribution, attributes(standard_distribution))]
 pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
-	let derive_input = parse_macro_input!(input_item as DeriveInput);
+	let derive_input = parse_macro_input!(input_item);
 
-	// Let's pass it to darling.
 	let derive_data_result =
 		self::derive_standard_distribution::DeriveData::from_derive_input(&derive_input);
 
-	// Finally, generate the output (whether that be an impl or a error)
 	let output = match derive_data_result {
 		Ok(v) => v.into_token_stream(),
 		Err(e) => e.write_errors(),
@@ -49,8 +47,7 @@ pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
 	output.into()
 }
 
-/// Generates an `impl SampleUniform for T` for the input item. Optionally also generates a uniform
-/// sampler based on the input item, if the user desires.
+/// Generates a `impl SampleUniform for T` for the input item.
 // parameters:
 // * `#[sample_uniform(sampler_path = XSampler)]`
 //   * Points this SampleUniform trait to a specific sampler, via its path.

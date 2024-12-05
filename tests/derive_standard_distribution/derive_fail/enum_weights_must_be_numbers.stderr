@@ -1,29 +1,29 @@
 error: Weights must be a Int or Float literal
- --> tests/standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:6:35
+ --> tests/derive_standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:6:35
   |
 6 |     #[standard_distribution(weight = "1.0")]
   |                                      ^^^^^
 
 error: Weights must be a Int or Float literal
-  --> tests/standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:10:35
+  --> tests/derive_standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:10:35
    |
 10 |     #[standard_distribution(weight = true)]
    |                                      ^^^^
 
 error: Weights must be a Int or Float literal
-  --> tests/standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:14:35
+  --> tests/derive_standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:14:35
    |
 14 |     #[standard_distribution(weight = "abcd")]
    |                                      ^^^^^^
 
 error: Weights must be a Int or Float literal
-  --> tests/standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:22:35
+  --> tests/derive_standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:22:35
    |
 22 |     #[standard_distribution(weight = "1.0")]
    |                                      ^^^^^
 
 error: Weights must be a Int or Float literal
-  --> tests/standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:26:35
+  --> tests/derive_standard_distribution/derive_fail/enum_weights_must_be_numbers.rs:26:35
    |
 26 |     #[standard_distribution(weight = true)]
    |                                      ^^^^

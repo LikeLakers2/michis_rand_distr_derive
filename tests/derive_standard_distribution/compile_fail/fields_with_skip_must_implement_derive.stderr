@@ -1,5 +1,5 @@
 error[E0277]: the trait bound `MyNonDefaultStruct: Default` is not satisfied
- --> tests/standard_distribution/compile_fail/fields_with_skip_must_implement_derive.rs:6:10
+ --> tests/derive_standard_distribution/compile_fail/fields_with_skip_must_implement_derive.rs:6:10
   |
 6 | #[derive(StandardDistribution)]
   |          ^^^^^^^^^^^^^^^^^^^^ the trait `Default` is not implemented for `MyNonDefaultStruct`
@@ -12,7 +12,7 @@ help: consider annotating `MyNonDefaultStruct` with `#[derive(Default)]`
   |
 
 error[E0277]: the trait bound `MyNonDefaultStruct: Default` is not satisfied
-  --> tests/standard_distribution/compile_fail/fields_with_skip_must_implement_derive.rs:20:10
+  --> tests/derive_standard_distribution/compile_fail/fields_with_skip_must_implement_derive.rs:20:10
    |
 20 | #[derive(StandardDistribution)]
    |          ^^^^^^^^^^^^^^^^^^^^ the trait `Default` is not implemented for `MyNonDefaultStruct`

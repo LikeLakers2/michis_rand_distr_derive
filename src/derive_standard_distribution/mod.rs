@@ -11,7 +11,7 @@ use syn::{parse_quote, Generics, Ident, ItemImpl, Stmt, WherePredicate};
 #[darling(
 	attributes(standard_distribution),
 	supports(struct_any, enum_any),
-	and_then = Self::check_and_correct
+	and_then = Self::check_and_correct,
 )]
 pub struct DeriveData {
 	ident: Ident,
