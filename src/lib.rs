@@ -3,12 +3,12 @@ use proc_macro::TokenStream as TokenStream1;
 use quote::ToTokens;
 use syn::{parse_macro_input, DeriveInput};
 
-mod sample_uniform;
-mod standard_distribution;
-mod uniform_sampler;
+mod derive_sample_uniform;
+mod derive_standard_distribution;
+mod derive_uniform_sampler;
+mod generate_uniform_sampler;
 
-/// Derive macro generating `impl Distribution<T> for Standard`, where `T` is the struct or enum
-/// this is placed upon.
+/// Generates a `impl Distribution<T> for Standard` for the input item.
 ///
 /// When placed on an enum, a random variant is chosen, then the fields on that variant are filled.
 ///
@@ -24,7 +24,7 @@ mod uniform_sampler;
 ///
 /// ## `#[standard_distribution(weight = ...)]`
 /// **Applicable to:** Enum variants
-/// **Parameter type**: Int or float
+/// **Parameter type:** Int or float
 ///
 /// When attached to an enum variant, this will set the weight for that variant. The higher a
 /// variant's weight, the more likely it is to be chosen.
@@ -39,7 +39,7 @@ pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
 
 	// Let's pass it to darling.
 	let derive_data_result =
-		self::standard_distribution::DeriveData::from_derive_input(&derive_input);
+		self::derive_standard_distribution::DeriveData::from_derive_input(&derive_input);
 
 	// Finally, generate the output (whether that be an impl or a error)
 	let output = match derive_data_result {
@@ -49,20 +49,38 @@ pub fn derive_standard_distribution(input_item: TokenStream1) -> TokenStream1 {
 	output.into()
 }
 
+/// Generates an `impl SampleUniform for T` for the input item. Optionally also generates a uniform
+/// sampler based on the input item, if the user desires.
 // parameters:
-// * `#[sample_uniform(generate_uniform_sampler)]`
-//   * generates a new `UniformSampler` in the same module, named `<T>UniformSampler` (replace `<T>`
-//     with what this is attached to)
-// * `#[sample_uniform(generate_uniform_sampler(name = XSampler))]`
-//   * generates a new `UniformSampler` in the same module, with the given name
-#[proc_macro_derive(SampleUniform)]
+// * `#[sample_uniform(sampler_path = XSampler)]`
+//   * Points this SampleUniform trait to a specific sampler, via its path.
+//   * If unspecified, the sampler path will be `self::<T>UniformSampler`, where `<T>` is the input
+//     item's name. This means that if you attach both `#[derive(SampleUniform)]` and
+//     `#[generate_sampler_uniform]` to an item, it will already be linked.
+#[proc_macro_derive(SampleUniform, attributes(sample_uniform))]
 pub fn derive_sample_uniform(_input_item: TokenStream1) -> TokenStream1 {
+	todo!()
+}
+
+/// Generates a UniformSampler based on the input item.
+///
+/// The UniformSampler is placed in the same module as the input item.
+// parameters:
+// * **OPTIONAL:** `#[generate_uniform_sampler(name = "XSampler")]`
+//   * Sets the name of the generated uniform sampler.
+//   * If not specified, the name of the generated uniform sampler will be `<T>UniformSampler`,
+//     where `<T>` is the input item's name.
+#[proc_macro_attribute]
+pub fn generate_uniform_sampler(
+	_input_attrs: TokenStream1,
+	_input_item: TokenStream1,
+) -> TokenStream1 {
 	todo!()
 }
 
 // note: could we maybe have parameters that link specific fields in the uniform sampler, to the
 // fields in the sampled type? i.e. `#[uniform_sampler(linked_field_name = "x")] x_gen: f32`
-#[proc_macro_derive(UniformSampler)]
+#[proc_macro_derive(UniformSampler, attributes(uniform_sampler))]
 pub fn derive_uniform_sampler(_input_item: TokenStream1) -> TokenStream1 {
 	todo!()
 }
